@@ -36,6 +36,7 @@ import { SettingsView } from './settings/SettingsView';
 import { ACCENTS, SETTINGS } from './settings/schema';
 import { Settings, type Refresh } from './settings/store';
 import { StatusBar } from './statusBar';
+import { VoiceOver } from './voiceover';
 import { TitleBar } from './titleBar';
 import { Updates } from './updates';
 import { closePopovers, dialog, setFocusFallback, toast } from './widgets';
@@ -125,6 +126,7 @@ export class App {
   readonly updates: Updates;
   readonly library = new MediaLibrary();
   readonly player: Player;
+  readonly voiceover: VoiceOver;
   readonly layout: Layout;
   readonly history = new History<Project>(200);
   project: Project | null = null;
@@ -147,6 +149,7 @@ export class App {
     this.prefs = this.loadPrefs();
     this.history.limit = this.settings.num('files.undoSteps');
     this.player = new Player({ project: () => this.project!, seq: () => this.seq, library: this.library });
+    this.voiceover = new VoiceOver(this);
     this.commands = new Commands(this);
     this.titlebar = new TitleBar(this);
     this.statusbar = new StatusBar(this);

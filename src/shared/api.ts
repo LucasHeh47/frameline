@@ -58,6 +58,8 @@ export interface FramelineApi {
   saveFile(path: string, data: Uint8Array | string): Promise<SaveResult>;
   /** Streams a big file (an exported video) to a path from saveDialog. */
   exportStream: ExportStreamApi;
+  /** Saves a recorded voice-over (WebM sound) to the Videos folder; it can then be imported. */
+  saveRecording(data: Uint8Array): Promise<MediaFileInfo | null>;
   /** Small files kept between sessions (waveforms, thumbnails). */
   cache: CacheApi;
   recovery: RecoveryApi;

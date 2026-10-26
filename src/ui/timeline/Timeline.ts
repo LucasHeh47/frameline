@@ -394,6 +394,7 @@ export class Timeline implements Panel {
               btn(t.solo, 'S', t.solo ? 'Stop soloing' : 'Solo: hear only this track', () => setTrack(t, 'Solo track', (x) => (x.solo = !x.solo)), 'solo'),
               btn(t.locked, t.locked ? L.Lock : L.LockOpen, t.locked ? 'Unlock the track' : 'Lock the track (no edits)', () => setTrack(t, 'Lock track', (x) => (x.locked = !x.locked))),
               btn(t.syncLock, L.Link2, 'Sync lock: inserting and rippling move this track too', () => setTrack(t, 'Sync lock', (x) => (x.syncLock = !x.syncLock)), 'faint'),
+              btn(app.voiceover.track === t.id, L.Mic, app.voiceover.track === t.id ? 'Stop recording' : 'Record a voice-over onto this track from the playhead (use headphones)', () => void app.voiceover.toggle(t.id), `rec${app.voiceover.recording && app.voiceover.track !== t.id ? ' faint' : ''}`),
             ];
       const grip = h('div', { class: 'tl-hgrip' });
       grip.addEventListener('pointerdown', (e) => {
@@ -424,6 +425,7 @@ export class Timeline implements Panel {
             { label: `Add ${t.kind} track above`, icon: L.Plus, run: () => app.edit('Add track', (seq) => void addTrack(seq, t.kind, t.kind === 'video' ? i + 1 : i)) },
             { label: `Add ${t.kind} track below`, icon: L.Plus, run: () => app.edit('Add track', (seq) => void addTrack(seq, t.kind, t.kind === 'video' ? i : i + 1)) },
             { label: 'Rename…', run: () => name.dispatchEvent(new MouseEvent('dblclick')) },
+            ...(t.kind === 'audio' ? [{ label: app.voiceover.track === t.id ? 'Stop recording' : 'Record voice-over here', icon: L.Mic, run: () => void app.voiceover.toggle(t.id) }] : []),
             { separator: true },
             { label: 'Delete track', icon: L.Trash2, disabled: list.length <= 1, run: () => {
               if (t.clips.length) toast(`${t.name} still has clips; they were deleted with it. Undo brings them back.`);
@@ -1303,6 +1305,7 @@ export class Timeline implements Panel {
       { separator: true },
       { label: 'Scene edit detection…', icon: L.ScanLine, disabled: c.kind !== 'video', run: run('clip.scenes') },
       { label: 'Normalize audio', icon: L.AudioLines, disabled: c.kind !== 'audio', run: run('clip.normalize') },
+      { label: 'Auto-duck under other sound…', disabled: c.kind !== 'audio', run: run('clip.duck') },
       { label: 'Rename…', run: run('clip.rename') },
       { label: 'Label color', submenu: () => ['#5476c9', '#3a9468', '#c45495', '#b98a2a', '#8d68c7', '#e5383b', ''].map((col) => ({ label: col ? col : 'Default', run: () => app.edit('Label color', () => {
         for (const { clip } of app.selectedClips()) {

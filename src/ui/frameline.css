@@ -639,6 +639,17 @@ button.mon-tc.now:hover {
   border-color: #f2c94c;
   color: #1c1400;
 }
+.tl-hbtn.rec.on {
+  background: #e03131;
+  border-color: #e03131;
+  color: #fff;
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
 .tl-hgrip {
   position: absolute;
   left: 0;
@@ -1247,6 +1258,31 @@ button.mon-tc.now:hover {
 .lum-foot {
   padding: 8px 12px;
   margin: 0;
+}
+
+.scopes {
+  flex: none;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.scope-modes {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.scope-modes .btn.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.scope-canvas {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 360 / 150;
+  border-radius: 6px;
+  background: #000;
+  image-rendering: auto;
 }
 
 /* ---------- Audio mixer ---------- */

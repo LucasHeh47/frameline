@@ -1,6 +1,6 @@
 // The Lumetri Color panel: color correction for the selected clip with sliders (white balance,
 // exposure, contrast, highlights and shadows, saturation), a look (LUT) and a vignette, plus Auto,
-// which corrects from the frame at the playhead. It edits the clip's Lumetri Color effect.
+// which corrects from the frame at the playhead, and scopes. It edits the clip's Lumetri Color effect.
 import * as L from 'lucide';
 import { EFFECTS_BY_ID, defaultParams, makeEffect, numParam, strParam, type Effect } from '../../core/effects';
 import { autoCorrect } from '../../core/analysis';
@@ -11,6 +11,7 @@ import { slider } from '../controls';
 import { h, icon } from '../dom';
 import type { Panel } from '../layout';
 import { platform } from '../platform';
+import { Scopes } from './scopes';
 import { toast, tooltip } from '../widgets';
 
 export class LumetriPanel implements Panel {
@@ -18,12 +19,14 @@ export class LumetriPanel implements Panel {
   readonly title = 'Lumetri Color';
   readonly el: HTMLElement;
   private body: HTMLElement;
+  private scopes: Scopes;
   private dragging = false;
   private queued = false;
 
   constructor(private app: App) {
     this.body = h('div', { class: 'lum-body' });
-    this.el = h('div', { class: 'lumetri' }, this.body);
+    this.scopes = new Scopes(app);
+    this.el = h('div', { class: 'lumetri' }, this.scopes.el, this.body);
     for (const k of ['selection', 'project', 'sequence'] as const) app.on(k, () => this.request());
     this.request();
   }
@@ -39,6 +42,7 @@ export class LumetriPanel implements Panel {
 
   shown(): void {
     this.render();
+    this.scopes.update();
   }
 
   private target(): Clip | null {

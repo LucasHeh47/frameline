@@ -12,6 +12,6 @@ The first version of Frameline, a video editor in the style of Premiere Pro.
 - **Effects:** Lumetri Color (with Auto and .cube looks), Brightness & Contrast, Hue / Saturation, Black & White, Sepia, Tint, Invert, Posterize, Gaussian Blur, Sharpen, Glow, Ultra Key (green screen), Luma Key, Crop, Flip, Mask, Drop Shadow, Mosaic and Film Grain; adjustment layers; presets for fades, slow zooms, picture-in-picture and looks.
 - **Transitions:** Cross Dissolve, Dip to Black / White, Blur Dissolve, Wipe, Iris, Slide, Push and Cross Zoom; audio crossfades.
 - **Titles and captions:** title styles (lower third, subtitle, big statement…), and subtitles from .srt / .vtt files (and back).
-- **Sound:** an Audio Mixer with faders, balance and meters; Amplify, EQ, Highpass, Lowpass, Dynamics, Reverb, Delay and Channels; audio gain and normalize.
-- **Smart helpers:** scene edit detection, match the sequence to the first clip, Lumetri Auto.
+- **Sound:** an Audio Mixer with faders, balance and meters; Amplify, EQ, Highpass, Lowpass, Dynamics, Reverb, Delay and Channels; audio gain and normalize; voice-over recording onto a track; auto-ducking of music under speech.
+- **Smart helpers:** scene edit detection, match the sequence to the first clip, Lumetri Auto, and waveform / RGB parade / vectorscope scopes in Lumetri Color.
 - **Export:** MP4 (H.264), WebM (VP9) and MOV, or M4A / WAV sound, using the graphics card's encoder; Export Frame for stills.

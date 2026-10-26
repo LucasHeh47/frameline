@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { valueAt } from '../src/core/anim';
 import { autoCorrect, histogramDistance } from '../src/core/analysis';
+import { activeRanges, duckKeys } from '../src/core/ducking';
 import { PRESETS_BY_ID } from '../src/core/presets';
 import { generatedClip, newSequence } from '../src/core/project';
 
@@ -53,5 +54,27 @@ describe('analysis', () => {
     expect(autoCorrect(dark).exposure).toBeGreaterThan(0.5);
     const warm = new Uint8Array(frame(200, 120, 60));
     expect(autoCorrect(warm).temperature).toBeLessThan(0);
+  });
+});
+
+describe('auto-ducking', () => {
+  it('finds speech, joining short pauses and ignoring blips', () => {
+    const levels = [0, 0, 0.5, 0.6, 0, 0.5, 0, 0, 0, 0, 0.9, 0, 0, 0];
+    expect(activeRanges(levels, 0.1, 2, 2)).toEqual([[2, 6]]);
+    expect(activeRanges(levels, 0.1, 2, 1)).toEqual([[2, 6], [10, 11]]);
+  });
+
+  it('dips the music under each range, with fades', () => {
+    const keys = duckKeys([[100, 200]], 50, 300, 0, -12, 10);
+    expect(keys.map((k) => [k.f, k.v])).toEqual([[40, 0], [50, -12], [150, -12], [160, 0]]);
+    // Two ranges close together make one dip
+    const merged = duckKeys([[100, 120], [125, 140]], 0, 300, -3, 10, 5);
+    expect(merged.map((k) => [k.f, k.v])).toEqual([[95, -3], [100, -13], [140, -13], [145, -3]]);
+  });
+
+  it('keeps keyframes inside the clip', () => {
+    const keys = duckKeys([[0, 30]], 10, 100, 0, 12, 15);
+    expect(keys[0]).toMatchObject({ f: 0, v: -12 });
+    expect(keys.every((k) => k.f >= 0 && k.f <= 99)).toBe(true);
   });
 });

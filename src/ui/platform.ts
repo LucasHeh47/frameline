@@ -81,6 +81,10 @@ const webFallback: Omit<FramelineApi, 'isDesktop'> & { isDesktop: boolean } = {
       return download(c.name, all);
     },
   },
+  saveRecording: async (data) => {
+    const f = new File([data as BlobPart], `Voice-over ${Date.now()}.webm`, { type: 'audio/webm' });
+    return asInfo(f);
+  },
   cache: { get: async () => null, put: async () => undefined },
   recovery: { save: async () => undefined, list: async () => [], read: async () => null, remove: async () => undefined },
   suite: { apps: async () => [], launch: async () => false },

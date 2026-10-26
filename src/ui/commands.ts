@@ -7,6 +7,7 @@ import { allTracks, clipEnd, findClip, sequenceDuration, sourceTimeAt, TITLE_PRE
 import type { App } from './app';
 import { h } from './dom';
 import { exportCaptions, importCaptions } from './dialogs/captions';
+import { autoDuck } from './dialogs/ducking';
 import { normalizeSelected, openAudioGain } from './dialogs/audioGain';
 import { exportFrame, openExport } from './dialogs/export';
 import { detectScenes } from './dialogs/scenes';
@@ -240,6 +241,7 @@ export class Commands {
     } });
     a({ id: 'clip.scenes', title: 'Scene edit detection…', category: 'Clip', icon: L.ScanLine, keywords: 'cut detect shots split automatically', enabled: () => app.selectedClips().some((x) => x.clip.kind === 'video'), run: () => detectScenes(app) });
     a({ id: 'clip.audioGain', title: 'Audio gain…', category: 'Clip', icon: L.AudioLines, keys: ['G'], keywords: 'louder quieter volume normalize', enabled: () => app.selectedClips().some((x) => x.clip.kind === 'audio'), run: () => openAudioGain(app) });
+    a({ id: 'clip.duck', title: 'Auto-duck music…', category: 'Clip', icon: L.AudioLines, keywords: 'ducking lower music under voice speech dialogue background', enabled: () => app.selectedClips().some((x) => x.clip.kind === 'audio'), run: () => autoDuck(app) });
     a({ id: 'clip.normalize', title: 'Normalize audio', category: 'Clip', icon: L.AudioWaveform, keywords: 'loudness level peak', enabled: () => app.selectedClips().some((x) => x.clip.kind === 'audio'), run: () => normalizeSelected(app, -1) });
     a({ id: 'clip.rename', title: 'Rename…', category: 'Clip', enabled: hasSel, run: async () => {
       const first = app.selectedClips()[0];
@@ -380,6 +382,7 @@ export class Commands {
     // ---------- Playback ----------
     a({ id: 'play.toggle', title: 'Play / stop', category: 'Playback', icon: L.Play, keys: ['Space'], run: () => {
       if (source()) return app.layout.source.toggle();
+      if (app.voiceover.recording) return void app.voiceover.stop();
       if (app.player.playing) {
         app.player.pause();
         if (app.settings.bool('playback.returnOnStop')) app.setPlayhead(this.playStart);

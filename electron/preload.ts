@@ -23,6 +23,7 @@ const api: FramelineApi = {
     write: (h, pos, data) => ipcRenderer.invoke('export:write', h, pos, data),
     close: (h, ok) => ipcRenderer.invoke('export:close', h, ok),
   },
+  saveRecording: (data) => ipcRenderer.invoke('recording:save', data),
   cache: {
     get: (k) => ipcRenderer.invoke('cache:get', k),
     put: (k, data) => ipcRenderer.invoke('cache:put', k, data),

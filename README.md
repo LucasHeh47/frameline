@@ -36,7 +36,7 @@ Frameline is a sister app of [Gridline](https://github.com/LucasHeh47/gridline),
 **Making it look good**
 
 - **Effect Controls with keyframes** for everything that has a number: Motion, Opacity with 12 blend modes, every effect setting, volume and balance. Ease in and out, or hold.
-- **Lumetri Color**: white balance, exposure, contrast, highlights and shadows, whites and blacks, saturation and vibrance, faded film, a vignette, and **.cube LUT looks**. **Auto** corrects from the frame at the playhead.
+- **Lumetri Color**: white balance, exposure, contrast, highlights and shadows, whites and blacks, saturation and vibrance, faded film, a vignette, and **.cube LUT looks**. **Auto** corrects from the frame at the playhead. **Scopes** (waveform, RGB parade and vectorscope) show what the picture really looks like while you grade.
 - **Effects**: Gaussian Blur, Sharpen, Glow, **Ultra Key** (green screen), Luma Key, Crop, Flip, **Mask** (to blur a face or spotlight something), Drop Shadow, Mosaic, Film Grain, Brightness & Contrast, Hue / Saturation, Black & White, Sepia, Tint, Invert and Posterize. **Adjustment layers** apply effects to everything below them.
 - **Transitions**: Cross Dissolve, Dip to Black, Dip to White, Blur Dissolve, Wipe, Iris, Slide, Push and Cross Zoom. Ctrl+D adds one at the playhead; drag its edges to change its length.
 - **Titles** in styles like a lower third, a subtitle or a big statement, with outlines, shadows and background boxes. **Captions** import from `.srt` / `.vtt` files and export back.
@@ -47,6 +47,8 @@ Frameline is a sister app of [Gridline](https://github.com/LucasHeh47/gridline),
 - **Audio Track Mixer** with faders, balance, mute, solo and meters, plus master meters beside the timeline.
 - **Audio effects**: Amplify, Simple EQ, Highpass, Lowpass, Dynamics (compressor), Studio Reverb, Delay, and Channels (fixes sound that's only on one side). **Normalize** sets the loudest moment to a level.
 - **Crossfades** (constant power, constant gain, exponential) and volume lines you can drag on the timeline.
+- **Record a voice-over** straight onto an audio track: press the microphone on the track, talk while the video plays, and press Space to stop. Recordings are saved in your Videos folder under *Frameline voice-overs*.
+- **Auto-duck** lowers the music wherever someone speaks, with keyframes you can adjust afterwards (right-click the music, or Clip > Auto-duck music).
 
 **Clever helpers**
 

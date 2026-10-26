@@ -29,7 +29,7 @@ export class TitleBar {
       { label: 'Edit', spec: () => ['edit.undo', 'edit.redo', '-', 'edit.cut', 'edit.copy', 'edit.paste', 'edit.pasteInsert', 'edit.pasteAttributes', '-', 'edit.clear', 'edit.rippleDelete', 'edit.duplicate', '-', 'edit.selectAll', 'edit.deselect', '-', 'app.settings'] },
       {
         label: 'Clip',
-        spec: () => ['clip.speed', 'clip.frameHold', '-', 'clip.enable', 'clip.link', 'clip.rename', '-', 'clip.audioGain', 'clip.normalize', '-', 'clip.scenes', '-', 'clip.insert', 'clip.overwrite', 'clip.matchFrame', '-', 'clip.nudgeLeft', 'clip.nudgeRight'],
+        spec: () => ['clip.speed', 'clip.frameHold', '-', 'clip.enable', 'clip.link', 'clip.rename', '-', 'clip.audioGain', 'clip.normalize', 'clip.duck', '-', 'clip.scenes', '-', 'clip.insert', 'clip.overwrite', 'clip.matchFrame', '-', 'clip.nudgeLeft', 'clip.nudgeRight'],
       },
       {
         label: 'Sequence',

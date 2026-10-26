@@ -77,10 +77,10 @@ export async function suiteApps(extra: Partial<Record<SuiteAppId, string>> = {})
   });
 }
 
-/** Arguments one app may pass when starting another: files, and options like --new=16x16. */
+/** Arguments one app may pass when starting another: files, and options like --new=16x16 or --fps=24. */
 export function safeLaunchArgs(args: unknown): string[] {
   if (!Array.isArray(args)) return [];
-  return args.filter((a): a is string => typeof a === 'string' && a.length < 400 && (/^--(new|template|bg|name)(=[^"\r\n]{0,120})?$/.test(a) || (path.isAbsolute(a) && existsSync(a))));
+  return args.filter((a): a is string => typeof a === 'string' && a.length < 400 && (/^--(new|template|bg|name|fps)(=[^"\r\n]{0,120})?$/.test(a) || (path.isAbsolute(a) && existsSync(a))));
 }
 
 /** Starts another app of the suite. Returns false when it isn't installed. */

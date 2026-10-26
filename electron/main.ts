@@ -356,6 +356,18 @@ ipcMain.handle('export:close', async (_e, id: number, ok: boolean) => {
   }
 });
 
+// Voice-overs recorded from the microphone go in Videos\Frameline voice-overs
+ipcMain.handle('recording:save', async (_e, data: Uint8Array) => {
+  if (!(data instanceof Uint8Array) || !data.length) return null;
+  const dir = TEST_SAVE_DIR ? path.join(TEST_SAVE_DIR, 'voice-overs') : path.join(app.getPath('videos'), 'Frameline voice-overs');
+  await fs.mkdir(dir, { recursive: true });
+  const d = new Date();
+  const two = (n: number) => String(n).padStart(2, '0');
+  const full = path.join(dir, `Voice-over ${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}.${two(d.getMinutes())}.${two(d.getSeconds())}.webm`);
+  const res = await writeAtomic(full, data);
+  return res.ok ? info(allow(full)) : null;
+});
+
 // Waveforms and thumbnails kept between sessions
 const cacheDir = () => path.join(app.getPath('userData'), 'cache');
 const CACHE_KEY = /^[a-z0-9_-]{1,80}$/;
@@ -582,9 +594,12 @@ if (!app.requestSingleInstanceLock()) {
     Menu.setApplicationMenu(null);
     app.setAppUserModelId('com.frameline.app');
     serveMedia();
-    // System fonts for titles
-    session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'local-fonts'));
-    session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'local-fonts');
+    // System fonts for titles, and the microphone for voice-overs (sound only, never the camera)
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, cb, details) => {
+      const media = permission === 'media' && 'mediaTypes' in details && (details.mediaTypes ?? []).every((t) => t === 'audio');
+      cb(permission === 'local-fonts' || media);
+    });
+    session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'local-fonts' || permission === 'media');
     const files = filesFromArgv(process.argv);
     if (process.env.FRAMELINE_OPEN && existsSync(process.env.FRAMELINE_OPEN)) files.push(process.env.FRAMELINE_OPEN);
     const projectFile = files.find((f) => PROJECT.test(f));
