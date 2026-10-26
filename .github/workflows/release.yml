@@ -1,0 +1,30 @@
+# Builds the Windows installer and publishes a GitHub release when a version tag (v1.2.3) is pushed.
+# Installed copies of Frameline check these releases and offer to update.
+name: Release
+
+on:
+  push:
+    tags: ['v*', '!v*-*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Release notes from CHANGELOG.md
+        run: node scripts/release-notes.mjs
+      - name: Build and publish
+        run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,100 @@
+{
+  "name": "frameline",
+  "productName": "Frameline",
+  "version": "0.1.0",
+  "description": "A video editor in the style of Premiere Pro: a multi-track timeline, titles, transitions, effects, color, keyframes and audio mixing, exporting MP4 and WebM.",
+  "main": "dist-electron/main.js",
+  "private": true,
+  "author": "LucasHeh47",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LucasHeh47/frameline.git"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json && vite build && node scripts/build-electron.mjs",
+    "start": "npm run build && electron .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
+    "dist": "npm run build && electron-builder --win",
+    "dist:dir": "npm run build && electron-builder --win --dir",
+    "release": "npm run build && electron-builder --win --publish never && node scripts/publish-release.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "electron-updater": "^6.8.9",
+    "lucide": "^1.55.0",
+    "mediabunny": "1.61.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
+  },
+  "build": {
+    "appId": "com.frameline.app",
+    "productName": "Frameline",
+    "copyright": "Frameline",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "LucasHeh47",
+        "repo": "frameline",
+        "releaseType": "release"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Frameline",
+      "artifactName": "Frameline-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Frameline-Portable-${version}.${ext}"
+    },
+    "fileAssociations": [
+      {
+        "ext": "frameline",
+        "name": "Frameline project",
+        "description": "Frameline video project",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      }
+    ],
+    "electronLanguages": [
+      "en-US"
+    ]
+  }
+}
