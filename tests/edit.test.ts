@@ -280,6 +280,18 @@ describe('speed, holds and transitions', () => {
     expect(a.speed).toBe(0.5);
   });
 
+  it('a faster clip doesn’t pull other tracks into a clip that spans it', () => {
+    const s = seq();
+    const a = put(s, clip(s, 30, 150), 1);
+    put(s, clip(s, 300, 30), 1);
+    put(s, clip(s, 0, 360));
+    put(s, clip(s, 360, 60));
+    setSpeed(s, a.id, 2, false, true);
+    // V2 closes up; V1's long clip is in the way, so V1 stays put
+    expect(spans(s, 1)).toEqual([[30, 105], [225, 255]]);
+    expect(spans(s)).toEqual([[0, 360], [360, 420]]);
+  });
+
   it('frame hold freezes the rest of the clip', () => {
     const s = seq();
     const a = put(s, clip(s, 0, 60, 1));

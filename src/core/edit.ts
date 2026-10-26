@@ -490,7 +490,13 @@ export function setSpeed(s: Sequence, clipId: string, speed: number, reverse: bo
     }
   }
   const d = durs.get(found.clip)! - found.clip.duration;
-  if (ripple && d) shiftFrom(rippleTracks(s, group.map((g) => g.t)), oldEnd, d, new Set(group.map((g) => g.c.id)));
+  if (ripple && d) {
+    const ids = new Set(group.map((g) => g.c.id));
+    const own = new Set(group.map((g) => g.t));
+    // Getting shorter pulls later clips back: only on tracks where nothing is in the way
+    const tracks = rippleTracks(s, [...own]).filter((t) => own.has(t) || d > 0 || roomBefore(t, oldEnd, ids) >= -d);
+    shiftFrom(tracks, oldEnd, d, ids);
+  }
   for (const { c } of group) {
     c.speed = speed;
     if (reverse) c.reverse = true;
