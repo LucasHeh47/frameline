@@ -90,6 +90,12 @@ export class Timeline implements Panel {
   private fitted = false;
   private tc!: HTMLElement;
   private lastSeq = '';
+  /** The canvas size, kept by a resize observer (reading it from the page forces a layout). */
+  private size = { w: 0, h: 0 };
+  /** The timeline as last drawn without the playhead, reused while only the playhead moves. */
+  private still: OffscreenCanvas | null = null;
+  /** Something besides the playhead changed since the last draw. */
+  private full = true;
 
   constructor(private app: App) {
     this.canvas = h('canvas', { class: 'tl-canvas', tabindex: '0' }) as HTMLCanvasElement;
@@ -106,7 +112,11 @@ export class Timeline implements Panel {
       this.bar,
       h('div', { class: 'tl-main' }, h('div', { class: 'tl-heads-col' }, h('div', { class: 'tl-heads-top' }), this.heads), h('div', { class: 'tl-canvas-wrap' }, this.canvas, vScroll), h('div', { class: 'tl-corner' }), hScroll),
     );
-    new ResizeObserver(() => this.request()).observe(this.canvas);
+    new ResizeObserver((entries) => {
+      const r = entries[entries.length - 1].contentRect;
+      this.size = { w: r.width, h: r.height };
+      this.request();
+    }).observe(this.canvas);
     for (const k of ['project', 'selection', 'media', 'settings', 'tool'] as const) app.on(k, () => this.request());
     app.on('project', () => this.renderHeads());
     app.on('sequence', () => {
@@ -152,6 +162,12 @@ export class Timeline implements Panel {
   }
 
   request(): void {
+    this.full = true;
+    this.requestPlayhead();
+  }
+
+  /** Redraws just the playhead (over the rest as it was) unless something else asked for more. */
+  private requestPlayhead(): void {
     if (this.queued) return;
     this.queued = true;
     requestAnimationFrame(() => {
@@ -163,11 +179,11 @@ export class Timeline implements Panel {
   // ---------- geometry ----------
 
   private get width(): number {
-    return this.canvas.clientWidth;
+    return this.size.w || this.canvas.clientWidth;
   }
 
   private get height(): number {
-    return this.canvas.clientHeight;
+    return this.size.h || this.canvas.clientHeight;
   }
 
   private x(f: number): number {
@@ -251,14 +267,17 @@ export class Timeline implements Panel {
 
   private onPlayhead(): void {
     const f = this.app.player.frame;
+    const scroll = this.scrollFrame;
     if (this.app.player.playing) {
       const mode = this.app.settings.str('timeline.follow');
       const x = this.x(f);
       if (mode === 'page' && x > this.width - 10) this.scrollFrame = f - 10 / this.ppf;
       else if (mode === 'smooth' && x > this.width * 0.5) this.scrollFrame = f - (this.width * 0.5) / this.ppf;
     }
-    this.tc.textContent = timecode(Math.floor(f), this.fps);
-    this.request();
+    const tc = timecode(Math.floor(f), this.fps);
+    if (this.tc.textContent !== tc) this.tc.textContent = tc;
+    if (this.scrollFrame !== scroll) this.request();
+    else this.requestPlayhead();
   }
 
   // ---------- bar and headers ----------
@@ -460,9 +479,24 @@ export class Timeline implements Panel {
       return;
     }
     const ctx = c.getContext('2d')!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const css = getComputedStyle(this.el);
-    const col = (n: string) => css.getPropertyValue(n).trim();
+    const colors = new Map<string, string>();
+    const col = (n: string) => {
+      let v = colors.get(n);
+      if (v === undefined) colors.set(n, (v = css.getPropertyValue(n).trim()));
+      return v;
+    };
+    // Only the playhead moved: put back the rest as it was, then draw it
+    const still = this.still;
+    if (!this.full && still && still.width === c.width && still.height === c.height && s && this.app.project) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(still, 0, 0);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.drawPlayhead(ctx, W, H, col);
+      return;
+    }
+    this.full = false;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = col('--bg');
     ctx.fillRect(0, 0, W, H);
     if (!s || !this.app.project) return;
@@ -559,7 +593,15 @@ export class Timeline implements Panel {
       ctx.fillStyle = '#ffd43b';
       ctx.fillRect(Math.round(this.x(this.snapAt)) - 0.5, 0, 1.5, H);
     }
-    // Playhead
+    if (this.still?.width !== c.width || this.still.height !== c.height) this.still = new OffscreenCanvas(c.width, c.height);
+    const sc = this.still.getContext('2d')!;
+    sc.clearRect(0, 0, c.width, c.height);
+    sc.drawImage(c, 0, 0);
+    this.drawPlayhead(ctx, W, H, col);
+    this.updateScrollbars();
+  }
+
+  private drawPlayhead(ctx: CanvasRenderingContext2D, W: number, H: number, col: (n: string) => string): void {
     const px = Math.round(this.x(this.app.player.frame)) + 0.5;
     if (px >= -10 && px <= W + 10) {
       ctx.strokeStyle = col('--accent');
@@ -578,7 +620,6 @@ export class Timeline implements Panel {
       ctx.closePath();
       ctx.fill();
     }
-    this.updateScrollbars();
   }
 
   private drawRuler(ctx: CanvasRenderingContext2D, s: Sequence, W: number, col: (n: string) => string): void {

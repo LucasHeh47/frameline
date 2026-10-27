@@ -403,10 +403,11 @@ export class Player implements PictureProvider {
   private buf = new Float32Array(1024);
 
   private peak(a: AnalyserNode): number {
-    a.getFloatTimeDomainData(this.buf);
+    const buf = this.buf;
+    a.getFloatTimeDomainData(buf);
     let p = 0;
-    for (const v of this.buf) {
-      const x = v < 0 ? -v : v;
+    for (let i = 0; i < buf.length; i++) {
+      const x = buf[i] < 0 ? -buf[i] : buf[i];
       if (x > p) p = x;
     }
     return p;

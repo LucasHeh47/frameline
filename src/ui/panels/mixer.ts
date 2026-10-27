@@ -22,16 +22,21 @@ class Meter {
   private shown: [number, number] = [0, 0];
   private held: [number, number] = [0, 0];
   private heldAt = [0, 0];
+  /** Kept by a resize observer: reading the size from the page on every frame forces a layout. */
+  private size = { w: 0, h: 0 };
 
   constructor(cls = 'meter') {
     this.el = h('canvas', { class: cls }) as HTMLCanvasElement;
+    new ResizeObserver((entries) => {
+      const r = entries[entries.length - 1].contentRect;
+      this.size = { w: r.width, h: r.height };
+    }).observe(this.el);
   }
 
   draw(levels: [number, number], scale = false): void {
     const c = this.el;
     const dpr = devicePixelRatio || 1;
-    const w = c.clientWidth;
-    const hh = c.clientHeight;
+    const { w, h: hh } = this.size;
     if (!w || !hh) return;
     if (c.width !== Math.round(w * dpr)) c.width = Math.round(w * dpr);
     if (c.height !== Math.round(hh * dpr)) c.height = Math.round(hh * dpr);

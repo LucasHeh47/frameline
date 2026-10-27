@@ -98,8 +98,16 @@ export class MediaLibrary {
     }
     const t = this.thumbsOf(m);
     if (!t || !t.times.length) return null;
-    let best = 0;
-    for (let i = 1; i < t.times.length; i++) if (Math.abs(t.times[i] - time) < Math.abs(t.times[best] - time)) best = i;
+    // The times are in order: find the nearest by halving (filmstrips ask hundreds of times a frame)
+    const ts = t.times;
+    let lo = 0;
+    let hi = ts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (ts[mid] < time) lo = mid + 1;
+      else hi = mid;
+    }
+    const best = lo > 0 && Math.abs(ts[lo - 1] - time) <= Math.abs(ts[lo] - time) ? lo - 1 : lo;
     return { sheet: t.sheet, sx: (best % t.cols) * t.cellW, sy: Math.floor(best / t.cols) * t.cellH, sw: t.cellW, sh: t.cellH };
   }
 
@@ -227,20 +235,25 @@ export class MediaLibrary {
         const perSlot = sr / PEAK_RATE;
         let slot = Math.floor(timestamp * PEAK_RATE);
         let next = (slot + 1 - timestamp * PEAK_RATE) * perSlot;
-        let peak = 0;
-        for (let i = 0; i < len; i++) {
-          for (const ch of chans) {
-            const v = ch[i] < 0 ? -ch[i] : ch[i];
-            if (v > peak) peak = v;
-          }
-          if (i >= next) {
-            if (slot >= 0 && slot < slots) data[slot] = Math.max(data[slot], Math.min(255, Math.round(peak * 255)));
+        // A slot at a time, each channel in a plain loop (hours of sound go through here)
+        let i = 0;
+        while (i < len) {
+          // The sample at or just past `next` still belongs to this slot
+          const edge = Math.ceil(next);
+          const end = Math.min(len, edge + 1);
+          let peak = 0;
+          for (const ch of chans)
+            for (let j = i; j < end; j++) {
+              const v = ch[j] < 0 ? -ch[j] : ch[j];
+              if (v > peak) peak = v;
+            }
+          if (slot >= 0 && slot < slots) data[slot] = Math.max(data[slot], Math.min(255, Math.round(peak * 255)));
+          if (end > edge) {
             slot++;
             next += perSlot;
-            peak = 0;
           }
+          i = end;
         }
-        if (slot >= 0 && slot < slots) data[slot] = Math.max(data[slot], Math.min(255, Math.round(peak * 255)));
         // Show the waveform as it's made, every few seconds of audio
         if (timestamp - shown > 20) {
           shown = timestamp;

@@ -52,7 +52,8 @@ function scrubber(o: NumberOpts): HTMLElement & { set(v: number): void } {
   const el = h('span', { class: 'scrub', tabindex: '0', role: 'spinbutton', 'aria-valuenow': String(value) }, fmt(value)) as HTMLElement & { set(v: number): void };
   el.set = (v: number) => {
     value = v;
-    el.textContent = fmt(v);
+    const text = fmt(v);
+    if (el.textContent !== text) el.textContent = text;
   };
   el.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
@@ -227,11 +228,19 @@ export class EffectControls implements Panel {
   /** A keyframe lane: the clip's length, its keyframes, and the playhead. */
   private lane(clip: Clip, getAnims: (c: Clip) => (Anim | undefined)[], label: string): HTMLElement {
     const el = h('div', { class: 'ec-lane' });
+    const ph = h('span', { class: 'ec-lane-ph' });
+    // The keyframes are built again only when they change; the playhead just moves
+    let shown = '';
     const draw = () => {
       const c = findClip(this.seq, clip.id)?.clip ?? clip;
       const anims = getAnims(c).filter((a): a is Anim => !!a);
       const frames = [...new Set(anims.flatMap((a) => (a.keys ?? []).map((k) => k.f)))];
       const w = Math.max(1, c.duration - 1);
+      const left = `${Math.max(0, Math.min(1, (this.app.playhead - c.start) / w)) * 100}%`;
+      if (ph.style.left !== left) ph.style.left = left;
+      const key = `${c.start}|${w}|${this.seq.fps}|${frames.join(',')}`;
+      if (key === shown) return;
+      shown = key;
       el.replaceChildren(
         ...frames.map((f) => {
           const d = h('span', { class: 'ec-key', style: { left: `${(Math.max(0, Math.min(w, f)) / w) * 100}%` }, title: timecode(f, this.seq.fps) });
@@ -263,7 +272,7 @@ export class EffectControls implements Panel {
           });
           return d;
         }),
-        h('span', { class: 'ec-lane-ph', style: { left: `${(Math.max(0, Math.min(1, (this.app.playhead - c.start) / w))) * 100}%` } }),
+        ph,
       );
     };
     el.addEventListener('pointerdown', (e) => {
@@ -364,29 +373,43 @@ export class EffectControls implements Panel {
       });
       return s;
     });
-    const nav = h('span', { class: 'ec-nav' });
+    // Keyframe arrows: built once (this row updates on every frame while playing), and they look at
+    // the clip and the playhead when clicked
+    const keyed = (c: Clip) => all(c).filter((a): a is Anim => !!a);
+    const jump = (dir: 1 | -1) => {
+      const c = cur();
+      const f = this.local(c);
+      const k = keyed(c).map((a) => nearKey(a, f, dir)?.f).filter((x): x is number => x !== undefined);
+      if (k.length) this.app.setPlayhead(c.start + (dir < 0 ? Math.max(...k) : Math.min(...k)));
+    };
+    const addKeyBtn = h('button', { class: 'btn icon-only tiny ec-addkey', 'aria-label': 'Add keyframe', onclick: () => {
+      const c = cur();
+      const f = this.local(c);
+      const here = keyed(c).some((a) => keyAt(a, f));
+      this.set(c, here ? 'Remove keyframe' : 'Add keyframe', (x) => {
+        for (const a of all(x)) if (a) (here ? removeKey(a, f) : addKey(a, f));
+      });
+    } }, icon(L.Diamond, 11));
+    const nav = h(
+      'span',
+      { class: 'ec-nav' },
+      h('button', { class: 'btn icon-only tiny', 'aria-label': 'Previous keyframe', onclick: () => jump(-1) }, icon(L.ChevronLeft, 12)),
+      addKeyBtn,
+      h('button', { class: 'btn icon-only tiny', 'aria-label': 'Next keyframe', onclick: () => jump(1) }, icon(L.ChevronRight, 12)),
+    );
     const tick = () => {
       const c = cur();
       const f = this.local(c);
       nums.forEach((n, i) => n.set(valueAt(getters[i](c), f, Array.isArray(o.def) ? o.def[i] : o.def)));
-      const anims = all(c).filter((a): a is Anim => !!a);
-      const on = anims.some((a) => a.keys?.length);
+      const anims = keyed(c);
       // Hidden but still taking its place in the row's grid
-      nav.style.visibility = on ? '' : 'hidden';
+      const visibility = anims.some((a) => a.keys?.length) ? '' : 'hidden';
+      if (nav.style.visibility !== visibility) nav.style.visibility = visibility;
       const here = anims.some((a) => keyAt(a, f));
-      nav.replaceChildren(
-        h('button', { class: 'btn icon-only tiny', 'aria-label': 'Previous keyframe', onclick: () => {
-          const k = anims.map((a) => nearKey(a, f, -1)?.f).filter((x): x is number => x !== undefined);
-          if (k.length) this.app.setPlayhead(c.start + Math.max(...k));
-        } }, icon(L.ChevronLeft, 12)),
-        h('button', { class: `btn icon-only tiny ec-addkey${here ? ' on' : ''}`, 'aria-label': here ? 'Remove keyframe' : 'Add keyframe', onclick: () => this.set(c, here ? 'Remove keyframe' : 'Add keyframe', (x) => {
-          for (const a of all(x)) if (a) (here ? removeKey(a, f) : addKey(a, f));
-        }) }, icon(L.Diamond, 11)),
-        h('button', { class: 'btn icon-only tiny', 'aria-label': 'Next keyframe', onclick: () => {
-          const k = anims.map((a) => nearKey(a, f, 1)?.f).filter((x): x is number => x !== undefined);
-          if (k.length) this.app.setPlayhead(c.start + Math.min(...k));
-        } }, icon(L.ChevronRight, 12)),
-      );
+      if (addKeyBtn.classList.contains('on') !== here) {
+        addKeyBtn.classList.toggle('on', here);
+        addKeyBtn.setAttribute('aria-label', here ? 'Remove keyframe' : 'Add keyframe');
+      }
     };
     tick();
     this.tickers.push(tick);

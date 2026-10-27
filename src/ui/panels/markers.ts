@@ -12,6 +12,8 @@ export class MarkersPanel implements Panel {
   readonly title = 'Markers';
   readonly el: HTMLElement;
   private list: HTMLElement;
+  /** Each marker's row, to light up the one the playhead is on. */
+  private rows: { f: number; el: HTMLElement }[] = [];
 
   constructor(private app: App) {
     this.list = h('div', { class: 'mk-list' });
@@ -20,7 +22,12 @@ export class MarkersPanel implements Panel {
     const chapters = h('button', { class: 'btn small text', onclick: () => app.commands.run('marker.chapters') }, icon(L.ListOrdered, 13), 'Copy as YouTube chapters');
     tooltip(chapters, 'Copies "0:00 Name" lines for your video description');
     this.el = h('div', { class: 'markers-panel' }, h('div', { class: 'proj-bar' }, add, chapters), this.list);
-    for (const k of ['project', 'sequence', 'playhead'] as const) app.on(k, () => this.render());
+    for (const k of ['project', 'sequence'] as const) app.on(k, () => this.render());
+    // The playhead moves on every frame while playing: just light up the marker it's on
+    app.on('playhead', () => {
+      const ph = app.playhead;
+      for (const r of this.rows) r.el.classList.toggle('on', r.f === ph);
+    });
     this.render();
   }
 
@@ -37,6 +44,7 @@ export class MarkersPanel implements Panel {
       return;
     }
     const ph = app.playhead;
+    this.rows = [];
     this.list.replaceChildren(
       ...s.markers.map((m) => {
         const name = h('input', { class: 'input mk-name', value: m.name, placeholder: 'Name' }) as HTMLInputElement;
@@ -67,7 +75,9 @@ export class MarkersPanel implements Panel {
           app.layout.timeline.reveal(m.f);
         } }, timecode(m.f, s.fps));
         const del = h('button', { class: 'btn icon-only small', 'aria-label': 'Delete marker', onclick: () => app.edit('Delete marker', (seq) => void (seq.markers = seq.markers.filter((x) => x.id !== m.id))) }, icon(L.X, 13));
-        return h('div', { class: `mk-row${m.f === ph ? ' on' : ''}` }, dot, go, name, note, del);
+        const row = h('div', { class: `mk-row${m.f === ph ? ' on' : ''}` }, dot, go, name, note, del);
+        this.rows.push({ f: m.f, el: row });
+        return row;
       }),
     );
   }

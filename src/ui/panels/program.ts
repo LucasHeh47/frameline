@@ -44,6 +44,9 @@ export class ProgramMonitor implements Panel {
   private drag: Drag | null = null;
   private editor: HTMLTextAreaElement | null = null;
   private loopBtn!: HTMLButtonElement;
+  /** The scrub bar's size, kept by a resize observer (reading it from the page forces a layout). */
+  private scrubSize = { w: 0, h: 0 };
+  private shownPlaying: boolean | null = null;
 
   constructor(private app: App) {
     this.canvas = h('canvas', { class: 'mon-canvas' }) as HTMLCanvasElement;
@@ -52,6 +55,7 @@ export class ProgramMonitor implements Panel {
     this.tcNow = h('button', { class: 'mon-tc now', onclick: () => this.typeTimecode() });
     tooltip(this.tcNow, 'Playhead position — click to type a time');
     this.tcDur = h('span', { class: 'mon-tc dur' });
+    tooltip(this.tcDur, () => (this.seq?.inPoint !== null && this.seq?.outPoint !== null ? 'Length from in to out' : 'Length of the sequence'));
     const zoomSel = h('select', { class: 'input mon-select', 'aria-label': 'Zoom' }, ...ZOOMS.map(([v, l]) => h('option', { value: v }, l))) as HTMLSelectElement;
     zoomSel.addEventListener('change', () => {
       this.zoom = zoomSel.value;
@@ -113,6 +117,11 @@ export class ProgramMonitor implements Panel {
       this.settingsMenu({ left: e.clientX, top: e.clientY, right: e.clientX, bottom: e.clientY });
     });
     this.scrub.addEventListener('pointerdown', (e) => this.scrubDown(e));
+    new ResizeObserver((entries) => {
+      const r = entries[entries.length - 1].contentRect;
+      this.scrubSize = { w: r.width, h: r.height };
+      this.request();
+    }).observe(this.scrub);
   }
 
   /** The sequence size the canvas was laid out for. */
@@ -178,7 +187,8 @@ export class ProgramMonitor implements Panel {
     const f = Math.floor(app.player.frame);
     const c = this.ensureCompositor();
     const bg = app.settings.str('playback.background');
-    this.view.style.background = bg === 'black' ? '#000' : bg === 'mid' ? '#3a3d44' : '';
+    const back = bg === 'black' ? '#000' : bg === 'mid' ? '#3a3d44' : '';
+    if (this.view.style.background !== back) this.view.style.background = back;
     if (c) {
       // No more pixels than are on screen (and no more than the playback resolution)
       const res = Number(app.settings.str('playback.resolution')) || 1;
@@ -189,11 +199,15 @@ export class ProgramMonitor implements Panel {
         console.error(err);
       }
     }
-    this.tcNow.textContent = timecode(f, s.fps);
-    const dur = s.inPoint !== null && s.outPoint !== null ? s.outPoint - s.inPoint : sequenceDuration(s);
-    this.tcDur.textContent = timecode(dur, s.fps);
-    tooltip(this.tcDur, s.inPoint !== null && s.outPoint !== null ? 'Length from in to out' : 'Length of the sequence');
-    this.playBtn.replaceChildren(icon(app.player.playing ? L.Square : L.Play, 16));
+    // Only what changed (this runs on every frame while playing)
+    const now = timecode(f, s.fps);
+    if (this.tcNow.textContent !== now) this.tcNow.textContent = now;
+    const dur = timecode(s.inPoint !== null && s.outPoint !== null ? s.outPoint - s.inPoint : sequenceDuration(s), s.fps);
+    if (this.tcDur.textContent !== dur) this.tcDur.textContent = dur;
+    if (this.shownPlaying !== app.player.playing) {
+      this.shownPlaying = app.player.playing;
+      this.playBtn.replaceChildren(icon(app.player.playing ? L.Square : L.Play, 16));
+    }
     this.loopBtn.classList.toggle('on', app.player.loop);
     this.drawScrub();
     this.drawOverlay();
@@ -205,8 +219,7 @@ export class ProgramMonitor implements Panel {
     const s = this.seq!;
     const c = this.scrub;
     const dpr = devicePixelRatio || 1;
-    const w = c.clientWidth;
-    const hh = c.clientHeight;
+    const { w, h: hh } = this.scrubSize;
     if (!w) return;
     if (c.width !== Math.round(w * dpr)) c.width = Math.round(w * dpr);
     if (c.height !== Math.round(hh * dpr)) c.height = Math.round(hh * dpr);
