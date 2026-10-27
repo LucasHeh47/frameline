@@ -511,7 +511,16 @@ export class ProjectPanel implements Panel {
     const app = this.app;
     const p = app.project!;
     if (!ids.length) return;
-    const media = ids.map((id) => p.media.find((m) => m.id === id)).filter((m): m is MediaItem => !!m);
+    // Media in the bins being deleted goes too
+    const bins = new Set(ids);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const b of p.bins) if (b.parent && bins.has(b.parent) && !bins.has(b.id)) {
+        bins.add(b.id);
+        grew = true;
+      }
+    }
+    const media = p.media.filter((m) => ids.includes(m.id) || (m.bin && bins.has(m.bin)));
     const used = media.reduce((n, m) => n + this.used(m), 0);
     const seqs = ids.filter((id) => p.sequences.some((s) => s.id === id));
     if (seqs.length >= p.sequences.length) {

@@ -267,7 +267,11 @@ async function scheduleClip(ctx: OfflineAudioContext, sources: Sources, seq: Seq
   node.buffer = c.reverse ? reversed(dec.buffer) : dec.buffer;
   node.playbackRate.value = c.speed;
   const bufEnd = dec.start + dec.buffer.duration;
-  const offset = c.reverse ? bufEnd - ta : ta - dec.start;
+  // A transition can start before the media does (no handle): the sound waits for its first moment
+  // instead of starting early and running out of step with the picture
+  const first = c.reverse ? Math.min(ta, bufEnd) : Math.max(ta, dec.start);
+  const wait = Math.abs(first - ta) / c.speed;
+  const offset = c.reverse ? bufEnd - first : first - dec.start;
   const fx = buildChain(ctx, c.effects);
   const gain = ctx.createGain();
   const pan = ctx.createStereoPanner();
@@ -282,8 +286,8 @@ async function scheduleClip(ctx: OfflineAudioContext, sources: Sources, seq: Seq
   pan.pan.value = Math.max(-1, Math.min(1, valueAt(c.pan, fa - c.start, 0) / 100));
   if (c.pan?.keys?.length) for (let f = fa + 1; f <= fb; f++) pan.pan.linearRampToValueAtTime(Math.max(-1, Math.min(1, valueAt(c.pan, f - c.start, 0) / 100)), Math.max(0, at(f)));
   fx.automate((local) => Math.max(0, at(local + c.start)), fa - c.start, fb - c.start);
-  const when = Math.max(0, at(fa));
-  node.start(when, Math.max(0, offset), (fb - fa) / fps * c.speed + 0.01);
+  const when = Math.max(0, at(fa) + wait);
+  node.start(when, Math.max(0, offset), Math.max(0.01, ((fb - fa) / fps) * c.speed - wait * c.speed + 0.01));
 }
 
 // ---------- the export ----------

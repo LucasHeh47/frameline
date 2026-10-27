@@ -176,6 +176,34 @@ describe('deleting', () => {
     trimToPlayhead(s, 50, 'next');
     expect(spans(s)).toEqual([[0, 50]]);
   });
+
+  it('trims only from the nearest edit when a long clip runs under the playhead', () => {
+    const s = seq();
+    put(s, clip(s, 0, 40, 0, 'first'));
+    put(s, clip(s, 40, 60, 0, 'second'));
+    put(s, clip(s, 0, 200, 0, 'music'), 1);
+    trimToPlayhead(s, 50, 'prev');
+    // Only 40–50 goes: the first clip stays whole, the music closes up
+    expect(spans(s)).toEqual([[0, 40], [40, 90]]);
+    expect(spans(s, 1)).toEqual([[0, 40], [40, 190]]);
+  });
+});
+
+describe('locked tracks', () => {
+  it('placing on a locked track goes to the next unlocked one', () => {
+    const s = seq();
+    const keep = put(s, clip(s, 0, 50, 0, 'keep'));
+    s.video[0].locked = true;
+    const items = [{ track: s.video[0], clip: clip(s, 10, 20, 0, 'new') }];
+    placeClips(s, items, 'overwrite');
+    expect(spans(s)).toEqual([[0, 50]]);
+    expect(s.video[0].clips[0]).toBe(keep);
+    expect(spans(s, 1)).toEqual([[10, 30]]);
+    s.video[1].locked = true;
+    placeClips(s, [{ track: s.video[0], clip: clip(s, 10, 20, 0, 'new') }], 'overwrite');
+    expect(s.video.length).toBe(3);
+    expect(spans(s, 2)).toEqual([[10, 30]]);
+  });
 });
 
 describe('trimming', () => {

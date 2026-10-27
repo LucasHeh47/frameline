@@ -2,7 +2,7 @@
 // sound of each clip through Web Audio (its volume, balance and effects, then its track's level and
 // the master level, with meters). The compositor draws the elements' current frames.
 import type { Effect } from '../core/effects';
-import { mediaOf, sequenceDuration, type Clip, type MediaItem, type Project, type Sequence, type Track } from '../core/project';
+import { mediaOf, sequenceDuration, sourceTimeAt, type Clip, type MediaItem, type Project, type Sequence, type Track } from '../core/project';
 import { audioAt, dbToGain, videoAt } from '../core/timeline';
 import type { Picture, PictureProvider } from '../render/compositor';
 import { platform } from '../ui/platform';
@@ -216,8 +216,15 @@ export class Player implements PictureProvider {
         }
       }
     }
+    // Before its media starts or after it ends (a transition with no handle), a clip holds its frame
+    const inMedia = (c: Clip) => {
+      const m = media(c);
+      if (!m || c.hold !== undefined || c.kind === 'image') return true;
+      const raw = sourceTimeAt(c, f, seq.fps);
+      return raw >= 0 && raw < m.duration;
+    };
     for (const [id, v] of this.videos) if (!want.has(id)) this.releaseVideo(id, v);
-    for (const w of want.values()) this.syncVideo(w.clip, w.time, playing && w.now);
+    for (const w of want.values()) this.syncVideo(w.clip, w.time, playing && w.now && inMedia(w.clip));
 
     // Sound plays only while playing forward
     const voices = playing && this.rate > 0 ? audioAt(seq, f, media) : [];
@@ -231,7 +238,7 @@ export class Player implements PictureProvider {
       b.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, t.pan / 100)), ctx.currentTime, 0.03);
     }
     this.master!.gain.setTargetAtTime(dbToGain(seq.masterVolume), ctx.currentTime, 0.03);
-    for (const v of voices) this.syncAudio(v.clip, v.track, v.time, v.local, v.fade, media(v.clip));
+    for (const v of voices) this.syncAudio(v.clip, v.track, v.time, v.local, v.fade, media(v.clip), inMedia(v.clip));
   }
 
   private syncVideo(clip: Clip, time: number, playing: boolean): void {
@@ -295,7 +302,7 @@ export class Player implements PictureProvider {
     }
   }
 
-  private syncAudio(clip: Clip, track: Track, time: number, local: number, fade: number, m: MediaItem | undefined): void {
+  private syncAudio(clip: Clip, track: Track, time: number, local: number, fade: number, m: MediaItem | undefined, inMedia: boolean): void {
     if (!m || !m.hasAudio || this.host.library.missing.has(m.id) || clip.reverse || clip.hold !== undefined) return;
     const ctx = this.audio();
     let a = this.audios.get(clip.id);
@@ -317,6 +324,12 @@ export class Player implements PictureProvider {
     a.gain.gain.setTargetAtTime(lv.gain * fade, ctx.currentTime, 0.015);
     a.pan.pan.setTargetAtTime(lv.pan, ctx.currentTime, 0.015);
     const el = a.el;
+    if (!inMedia) {
+      // Silent until its first moment (it starts from there on time)
+      if (!el.paused) el.pause();
+      if (Math.abs(el.currentTime - time) > 0.01) el.currentTime = time;
+      return;
+    }
     const r = Math.max(0.0625, Math.min(16, clip.speed * this.rate));
     if (Math.abs(el.playbackRate - r) > 1e-3) el.playbackRate = r;
     if (el.paused) {

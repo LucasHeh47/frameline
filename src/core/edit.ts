@@ -149,9 +149,18 @@ function shiftFrom(tracks: Track[], from: number, d: number, skip?: Set<string>)
 
 export type PlaceMode = 'overwrite' | 'insert';
 
-/** Puts clips on tracks. Overwrite replaces what's there; insert pushes later clips along. */
+/** The track itself, or when it's locked the nearest unlocked one of its kind (a new one if none). */
+export function unlockedTrack(s: Sequence, t: Track): Track {
+  if (!t.locked) return t;
+  const list = t.kind === 'video' ? s.video : s.audio;
+  const i = list.indexOf(t);
+  return list.slice(i + 1).find((x) => !x.locked) ?? list.slice(0, Math.max(0, i)).reverse().find((x) => !x.locked) ?? addTrack(s, t.kind);
+}
+
+/** Puts clips on tracks. Overwrite replaces what's there; insert pushes later clips along. Locked tracks are left alone. */
 export function placeClips(s: Sequence, items: { track: Track; clip: Clip }[], mode: PlaceMode): void {
   if (!items.length) return;
+  for (const it of items) it.track = unlockedTrack(s, it.track);
   if (mode === 'insert') {
     const f = Math.min(...items.map((i) => i.clip.start));
     const end = Math.max(...items.map((i) => clipEnd(i.clip)));
@@ -266,7 +275,8 @@ export interface MoveResult {
  */
 export function moveClips(s: Sequence, ids: Set<string>, df: number, dv: number, da: number, opts: { insert?: boolean; copy?: boolean } = {}): MoveResult {
   const moving: { clip: Clip; from: Track }[] = [];
-  for (const t of allTracks(s)) for (const c of t.clips) if (ids.has(c.id)) moving.push({ clip: c, from: t });
+  // Clips on locked tracks stay where they are
+  for (const t of allTracks(s)) if (!t.locked) for (const c of t.clips) if (ids.has(c.id)) moving.push({ clip: c, from: t });
   if (!moving.length) return { clips: [] };
   // Not before the start of the sequence, and onto existing unlocked tracks of the same kind
   const minStart = Math.min(...moving.map((m) => m.clip.start));
@@ -536,11 +546,12 @@ export function liftRange(s: Sequence, a: number, b: number, extract: boolean): 
 export function trimToPlayhead(s: Sequence, f: number, side: 'prev' | 'next'): boolean {
   const under = allTracks(s).flatMap((t) => (t.locked ? [] : t.clips.filter((c) => c.start < f && clipEnd(c) > f)));
   if (!under.length) return false;
+  // From the nearest edit, so a long clip on another track (music) doesn't take everything since its start
   if (side === 'prev') {
-    const a = Math.min(...under.map((c) => c.start));
+    const a = Math.max(...under.map((c) => c.start));
     liftRange(s, a, f, true);
   } else {
-    const b = Math.max(...under.map(clipEnd));
+    const b = Math.min(...under.map(clipEnd));
     liftRange(s, f, b, true);
   }
   return true;

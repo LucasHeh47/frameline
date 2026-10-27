@@ -22,7 +22,7 @@ import {
 } from '../../core/edit';
 import { EFFECTS_BY_ID, TRANSITIONS_BY_ID, makeEffect } from '../../core/effects';
 import { PRESETS_BY_ID } from '../../core/presets';
-import { allTracks, clipEnd, findClip, mediaOf, sequenceDuration, sourceTimeAt, type Clip, type Sequence, type Track } from '../../core/project';
+import { allTracks, clipEnd, findClip, linkedClips, mediaOf, sequenceDuration, sourceTimeAt, type Clip, type Sequence, type Track } from '../../core/project';
 import { shortDuration, timebase, timecode } from '../../core/time';
 import { snapPoints, snapShift } from '../../core/timeline';
 import type { App } from '../app';
@@ -1098,7 +1098,8 @@ export class Timeline implements Panel {
         if (!found) return;
         let delta = Math.round((x - d.x0) / this.ppf);
         const edgeF = d.edge === 'head' ? found.clip.start : clipEnd(found.clip);
-        const snapped = this.snapFrame(edgeF + delta, new Set([d.clip]));
+        // Not to its own linked clips' edges (they're in the same place and would hold it still)
+        const snapped = this.snapFrame(edgeF + delta, new Set(linkedClips(s, found.clip).map((c) => c.id)));
         delta = Math.round(snapped - edgeF);
         const p = structuredClone(s);
         d.d = d.mode === 'stretch' ? stretchClip(p, d.clip, d.edge, delta) : trimClip(p, d.clip, d.edge, delta, d.mode, media, !d.single);

@@ -1,7 +1,7 @@
 // The Frameline window: one project at a time, with the panels (Project, Source, Effect Controls,
 // Lumetri, Audio Mixer, Program monitor, Timeline…), the menus and the start page. Owns the project,
 // its undo history, the selection and the player, and tells the panels when things change.
-import { addTrack, applyTransition, audioTrackFor, cloneClip, placeClips, type PlaceMode } from '../core/edit';
+import { addTrack, applyTransition, audioTrackFor, cloneClip, placeClips, setSpeed, type PlaceMode } from '../core/edit';
 import { History } from '../core/history';
 import {
   activeSequence,
@@ -10,6 +10,7 @@ import {
   clipFromMedia,
   findClip,
   generatedClip,
+  hasMediaLimit,
   linkedClips,
   newProject,
   readProject,
@@ -491,7 +492,7 @@ export class App {
    */
   async placeMedia(items: MediaItem[], at: number, track: Track | null, mode: PlaceMode, parts: 'both' | 'video' | 'audio' = 'both', range?: { in: number; out: number }): Promise<void> {
     if (!items.length || !this.project) return;
-    await this.matchSequence(items[0]);
+    if (parts !== 'audio') await this.matchSequence(items[0]);
     const fit = this.settings.str('media.fit') as Clip['fit'];
     const placed: string[] = [];
     this.edit(items.length === 1 ? `Add ${items[0].name}` : `Add ${items.length} clips`, (s) => {
@@ -621,8 +622,9 @@ export class App {
       }),
     );
     if (!(await dialog('Paste attributes', body, [{ label: 'Paste', value: true, primary: true }, { label: 'Cancel', value: false }]))) return;
-    this.edit('Paste attributes', () => {
+    this.edit('Paste attributes', (seq) => {
       for (const { clip, track } of this.selectedClips()) {
+        if (boxes.speed && hasMediaLimit(clip) && (clip.speed !== src.speed || !!clip.reverse !== !!src.reverse)) setSpeed(seq, clip.id, src.speed, !!src.reverse, false);
         if (track.kind === 'video' && clip.kind !== 'audio') {
           if (boxes.motion && src.motion) clip.motion = structuredClone(src.motion);
           if (boxes.opacity && src.opacity) {
