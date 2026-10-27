@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { valueAt } from '../src/core/anim';
 import { autoCorrect, histogramDistance } from '../src/core/analysis';
 import { activeRanges, duckKeys } from '../src/core/ducking';
+import { chapterText } from '../src/core/chapters';
 import { PRESETS_BY_ID } from '../src/core/presets';
 import { generatedClip, newSequence } from '../src/core/project';
 
@@ -76,5 +77,13 @@ describe('auto-ducking', () => {
     const keys = duckKeys([[0, 30]], 10, 100, 0, 12, 15);
     expect(keys[0]).toMatchObject({ f: 0, v: -12 });
     expect(keys.every((k) => k.f >= 0 && k.f <= 99)).toBe(true);
+  });
+});
+
+describe('YouTube chapters', () => {
+  it('starts at 0:00 and names unnamed chapters', () => {
+    expect(chapterText([{ f: 300, name: 'Setup' }, { f: 1830, name: '' }, { f: 3600 * 30 + 90, name: 'Outro' }], 30)).toBe('0:00 Intro\n0:10 Setup\n1:01 Chapter 3\n1:00:03 Outro');
+    // A marker at the very start is the first chapter
+    expect(chapterText([{ f: 0, name: 'Hello' }, { f: 600, name: 'Main' }], 30)).toBe('0:00 Hello\n0:20 Main');
   });
 });

@@ -675,3 +675,113 @@ export function addMarker(s: Sequence, f: number, name = '', color = MARKER_COLO
   s.markers.sort((a, b) => a.f - b.f);
   return id;
 }
+
+// ---------- removing parts of clips ----------
+
+/**
+ * Takes ranges (timeline frames) out of clips and their linked clips, closing the gaps (jump cuts).
+ * Later clips on their tracks move back, and so do sync-locked tracks that are empty there. Returns
+ * the frames taken out.
+ */
+export function removeRanges(s: Sequence, ids: Set<string>, ranges: [number, number][]): number {
+  const group = new Map<Clip, Track>();
+  for (const t of allTracks(s)) {
+    if (t.locked) continue;
+    for (const c of t.clips) if (ids.has(c.id)) for (const l of linkedClips(s, c)) group.set(l, findClip(s, l.id)!.track);
+  }
+  if (!group.size) return 0;
+  const lo = Math.min(...[...group.keys()].map((c) => c.start));
+  const hi = Math.max(...[...group.keys()].map(clipEnd));
+  const cuts = merge(ranges.map(([a, b]) => [Math.max(lo, a), Math.min(hi, b)] as [number, number]).filter(([a, b]) => b > a));
+  if (!cuts.length) return 0;
+  // Each clip becomes the pieces between the cuts; pieces of linked clips stay linked
+  for (const [c, t] of group) {
+    if (t.locked) continue;
+    const end = clipEnd(c);
+    const parts: [number, number][] = [];
+    let at = c.start;
+    for (const [a, b] of cuts) {
+      if (b <= at || a >= end) continue;
+      if (a > at) parts.push([at, a]);
+      at = Math.max(at, b);
+    }
+    if (at < end) parts.push([at, end]);
+    if (parts.length === 1 && parts[0][0] === c.start && parts[0][1] === end) continue;
+    const orig = structuredClone(c);
+    const pieces = parts.map(([a, b], i) => {
+      const p = cloneClip(orig);
+      // The first piece keeps the clip's id (so it stays selected)
+      if (i === 0) p.id = c.id;
+      cutHead(p, a - orig.start, s.fps);
+      cutTail(p, end - b, s.fps);
+      if (a !== orig.start) delete p.transIn;
+      if (b !== end) delete p.transOut;
+      // Pieces of linked clips starting at the same frame stay linked to each other
+      if (orig.linkId) p.linkId = `${orig.linkId.split('.')[0]}.j${a.toString(36)}`;
+      return p;
+    });
+    t.clips = t.clips.filter((x) => x !== c).concat(parts.length ? pieces : []);
+    sortClips(t);
+  }
+  const own = new Set(group.values());
+  let removed = 0;
+  // Later cuts first, so earlier positions stay right
+  for (const [a, b] of [...cuts].reverse()) {
+    const tracks = allTracks(s).filter((t) => !t.locked && (own.has(t) || (t.syncLock && isFree(t, a, b))));
+    shiftFrom(tracks, b, -(b - a));
+    removed += b - a;
+  }
+  return removed;
+}
+
+// ---------- reframing ----------
+
+/**
+ * A copy of a sequence at another size (vertical for Shorts and Reels, square…): pictures fill the new
+ * frame (cropped around their middle), and positions, titles and text sizes follow.
+ */
+export function reframedSequence(s: Sequence, width: number, height: number, name: string): Sequence {
+  const out = structuredClone(s);
+  out.id = uid('s');
+  out.name = name;
+  out.width = width;
+  out.height = height;
+  const kx = width / s.width;
+  const ky = height / s.height;
+  const kText = Math.min(width, height) / Math.min(s.width, s.height);
+  const scaleAnim = (a: { v: number; keys?: { v: number }[] } | undefined, k: number) => {
+    if (!a) return;
+    a.v *= k;
+    for (const key of a.keys ?? []) key.v *= k;
+  };
+  for (const t of allTracks(out)) {
+    t.id = uid('t');
+    for (const c of t.clips) {
+      c.id = uid('c');
+      if (c.motion) {
+        scaleAnim(c.motion.x, kx);
+        scaleAnim(c.motion.y, ky);
+      }
+      if ((c.kind === 'video' || c.kind === 'image') && c.fit === 'fit') c.fit = 'fill';
+      if (c.title) {
+        c.title.size = Math.max(1, Math.round(c.title.size * kText));
+        c.title.boxPadding = Math.round(c.title.boxPadding * kText);
+        c.title.shadowBlur = Math.round(c.title.shadowBlur * kText);
+        c.title.shadowDistance = Math.round(c.title.shadowDistance * kText);
+        c.title.strokeWidth = Math.round(c.title.strokeWidth * kText * 10) / 10;
+      }
+    }
+  }
+  for (const m of out.markers) m.id = uid('m');
+  return out;
+}
+
+// ---------- cutting at markers ----------
+
+/** Splits clips (and their linked clips) at every marker inside them. Returns the number of cuts. */
+export function razorAtMarkers(s: Sequence, ids: Set<string>): number {
+  let n = 0;
+  // Latest first: each cut keeps the left part's id, so the clip asked for is still found
+  for (const m of [...s.markers].reverse()) n += razor(s, m.f, ids);
+  return n;
+}

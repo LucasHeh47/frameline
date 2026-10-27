@@ -29,12 +29,13 @@ export class TitleBar {
       { label: 'Edit', spec: () => ['edit.undo', 'edit.redo', '-', 'edit.cut', 'edit.copy', 'edit.paste', 'edit.pasteInsert', 'edit.pasteAttributes', '-', 'edit.clear', 'edit.rippleDelete', 'edit.duplicate', '-', 'edit.selectAll', 'edit.deselect', '-', 'app.settings'] },
       {
         label: 'Clip',
-        spec: () => ['clip.speed', 'clip.frameHold', '-', 'clip.enable', 'clip.link', 'clip.rename', '-', 'clip.audioGain', 'clip.normalize', 'clip.duck', '-', 'clip.scenes', '-', 'clip.insert', 'clip.overwrite', 'clip.matchFrame', '-', 'clip.nudgeLeft', 'clip.nudgeRight'],
+        spec: () => ['clip.speed', 'clip.frameHold', '-', 'clip.enable', 'clip.link', 'clip.rename', '-', 'clip.audioGain', 'clip.normalize', 'clip.duck', '-', 'clip.removePauses', 'clip.scenes', 'clip.cutAtMarkers', '-', 'clip.insert', 'clip.overwrite', 'clip.matchFrame', '-', 'clip.nudgeLeft', 'clip.nudgeRight'],
       },
       {
         label: 'Sequence',
         spec: () => [
           'sequence.settings',
+          'sequence.reframe',
           '-',
           'sequence.razor',
           'sequence.razorAll',
@@ -56,7 +57,7 @@ export class TitleBar {
           'timeline.linked',
         ],
       },
-      { label: 'Markers', spec: () => ['mark.in', 'mark.out', 'mark.clip', '-', 'go.in', 'go.out', '-', 'mark.clearIn', 'mark.clearOut', 'mark.clear', '-', 'marker.add', 'marker.next', 'marker.prev', 'marker.clear', 'marker.clearAll'] },
+      { label: 'Markers', spec: () => ['mark.in', 'mark.out', 'mark.clip', '-', 'go.in', 'go.out', '-', 'mark.clearIn', 'mark.clearOut', 'mark.clear', '-', 'marker.add', 'marker.next', 'marker.prev', 'marker.clear', 'marker.clearAll', '-', 'marker.beats', 'marker.chapters'] },
       { label: 'Graphics', spec: () => ['graphics.title', { label: 'New title from a style', icon: L.Type, items: () => TITLE_PRESETS.slice(1).map((p) => `graphics.title.${p.id}`) }, '-', 'graphics.colorMatte', 'graphics.adjustment', '-', 'file.importCaptions', 'file.exportCaptions'] },
       {
         label: 'View',

@@ -115,6 +115,9 @@ export class ProgramMonitor implements Panel {
     this.scrub.addEventListener('pointerdown', (e) => this.scrubDown(e));
   }
 
+  /** The sequence size the canvas was laid out for. */
+  private boxFor = '';
+
   private get seq(): Sequence | null {
     return this.app.project ? this.app.seq : null;
   }
@@ -157,6 +160,7 @@ export class ProgramMonitor implements Panel {
     const w = s.width * k;
     const hh = s.height * k;
     this.box = { x: (vw - w) / 2, y: (vh - hh) / 2, w, h: hh, k };
+    this.boxFor = `${s.width}x${s.height}`;
     Object.assign(this.canvas.style, { left: `${this.box.x}px`, top: `${this.box.y}px`, width: `${w}px`, height: `${hh}px` });
     const dpr = devicePixelRatio || 1;
     this.overlay.width = Math.round(vw * dpr);
@@ -169,7 +173,8 @@ export class ProgramMonitor implements Panel {
     const s = this.seq;
     const app = this.app;
     if (!s || !app.project) return;
-    if (!this.box.w) this.layoutCanvas();
+    // Again when the sequence changed shape (another sequence, new settings, a reframed copy)
+    if (!this.box.w || this.boxFor !== `${s.width}x${s.height}`) this.layoutCanvas();
     const f = Math.floor(app.player.frame);
     const c = this.ensureCompositor();
     const bg = app.settings.str('playback.background');

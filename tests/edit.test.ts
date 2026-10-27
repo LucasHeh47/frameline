@@ -12,6 +12,9 @@ import {
   nudge,
   placeClips,
   razor,
+  razorAtMarkers,
+  reframedSequence,
+  removeRanges,
   removeClips,
   setSpeed,
   slideClip,
@@ -22,7 +25,7 @@ import {
   trimClip,
   trimToPlayhead,
 } from '../src/core/edit';
-import { clipEnd, clipFromMedia, newSequence, sourceTimeAt, type Clip, type MediaItem, type Sequence } from '../src/core/project';
+import { clipEnd, clipFromMedia, generatedClip, newSequence, sourceTimeAt, titleFor, type Clip, type MediaItem, type Sequence } from '../src/core/project';
 
 const FPS = 30;
 const MEDIA: MediaItem = { id: 'm1', kind: 'video', name: 'a.mp4', path: 'C:\\a.mp4', duration: 20, width: 1920, height: 1080, fps: 30, hasVideo: true, hasAudio: true, channels: 2, sampleRate: 48000 };
@@ -349,5 +352,69 @@ describe('speed, holds and transitions', () => {
     applyTransition(s, a.id, 'out', 'crossDissolve', 10);
     clearRange(s.video[0], 50, 70, FPS);
     expect(a.transOut).toBeUndefined();
+  });
+});
+
+describe('jump cuts', () => {
+  it('takes ranges out of a clip and its sound, closing the gaps', () => {
+    const s = seq();
+    const v = put(s, clip(s, 0, 100));
+    const a = clipFromMedia(MEDIA, s, { start: 0, duration: 100 }, 'audio');
+    v.linkId = 'L';
+    a.linkId = 'L';
+    s.audio[0].clips.push(a);
+    put(s, clip(s, 100, 30, 5, 'after'));
+    const removed = removeRanges(s, new Set([v.id]), [[10, 20], [50, 70]]);
+    expect(removed).toBe(30);
+    expect(spans(s)).toEqual([[0, 10], [10, 40], [40, 70], [70, 100]]);
+    expect(s.audio[0].clips.map((c) => [c.start, clipEnd(c)])).toEqual([[0, 10], [10, 40], [40, 70]]);
+    // The media keeps its place: the second piece starts where the first cut ended (20 frames in)
+    expect(s.video[0].clips[1].in).toBeCloseTo(20 / FPS, 6);
+    expect(s.video[0].clips[2].in).toBeCloseTo(70 / FPS, 6);
+    // Pieces stay linked to their sound, and the first keeps the clip's id
+    expect(s.video[0].clips[0].id).toBe(v.id);
+    for (let i = 0; i < 3; i++) expect(s.video[0].clips[i].linkId).toBe(s.audio[0].clips[i].linkId);
+    expect(new Set(s.video[0].clips.slice(0, 3).map((c) => c.linkId)).size).toBe(3);
+  });
+
+  it('removes a clip that is all cut', () => {
+    const s = seq();
+    const v = put(s, clip(s, 10, 20));
+    put(s, clip(s, 30, 10, 0, 'next'));
+    expect(removeRanges(s, new Set([v.id]), [[0, 40]])).toBe(20);
+    expect(spans(s)).toEqual([[10, 20]]);
+  });
+});
+
+describe('cutting at markers', () => {
+  it('splits only the clips asked for, at each marker inside them', () => {
+    const s = seq();
+    const v = put(s, clip(s, 0, 100));
+    put(s, clip(s, 0, 100, 0, 'other'), 1);
+    s.markers = [10, 50, 150].map((f, i) => ({ id: `m${i}`, f, name: '', color: '#fff' }));
+    expect(razorAtMarkers(s, new Set([v.id]))).toBe(2);
+    expect(spans(s)).toEqual([[0, 10], [10, 50], [50, 100]]);
+    expect(spans(s, 1)).toEqual([[0, 100]]);
+  });
+});
+
+describe('reframing', () => {
+  it('makes a vertical copy where pictures fill the frame and positions follow', () => {
+    const s = seq();
+    const v = put(s, clip(s, 0, 50));
+    v.motion!.x.v = 1440;
+    const t = generatedClip('title', s, 0, 50, { title: titleFor(s) });
+    put(s, t, 1);
+    const r = reframedSequence(s, 1080, 1920, 'S (vertical)');
+    expect(r.id).not.toBe(s.id);
+    expect([r.width, r.height]).toEqual([1080, 1920]);
+    const rv = r.video[0].clips[0];
+    expect(rv.id).not.toBe(v.id);
+    expect(rv.fit).toBe('fill');
+    expect(rv.motion!.x.v).toBeCloseTo(810);
+    expect(rv.motion!.y.v).toBeCloseTo(960);
+    // The original is untouched
+    expect(v.fit).toBe('fit');
+    expect(r.video[1].clips[0].title!.size).toBe(t.title!.size);
   });
 });

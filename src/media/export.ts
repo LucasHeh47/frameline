@@ -3,6 +3,7 @@
 // the computer's video encoder (WebCodecs) and written to disk as it goes.
 import { AudioBufferSink, AudioBufferSource, CanvasSource, Input, Mp4OutputFormat, MovOutputFormat, Output, Quality, StreamTarget, VideoSampleSink, WavOutputFormat, WebMOutputFormat, type InputAudioTrack, type InputVideoTrack, type VideoSample } from 'mediabunny';
 import { valueAt } from '../core/anim';
+import { LoudnessMeter, normalizeGain, PeakLimiter } from '../core/audioAnalysis';
 import { strParam } from '../core/effects';
 import { allTracks, mediaOf, sourceTimeAt, type Clip, type MediaItem, type Project, type Sequence, type Track } from '../core/project';
 import { activeRange, audibleTracks, audioFade, clipGain, dbToGain, videoAt } from '../core/timeline';
@@ -26,6 +27,8 @@ export interface ExportSettings {
   range: [number, number];
   hardware: 'no-preference' | 'prefer-hardware' | 'prefer-software';
   audio: boolean;
+  /** Bring the sound to this loudness (LUFS), or leave it as mixed. */
+  loudness?: number | null;
 }
 
 export interface ExportProgress {
@@ -36,6 +39,8 @@ export interface ExportProgress {
   total: number;
   /** A small picture of the frame being made, now and then. */
   preview?: HTMLCanvasElement;
+  /** Once the sound is measured: its loudness (LUFS) and the gain (dB) applied to reach the target. */
+  loudness?: { measured: number; gain: number };
 }
 
 export const isAudioOnly = (f: ExportFormat) => f === 'm4a' || f === 'wav';
@@ -212,12 +217,12 @@ function reversed(b: AudioBuffer): AudioBuffer {
  * Mixes the sequence's sound between two seconds (relative to the sequence's start). The mix starts
  * a little early so reverbs and echoes carry over from the window before; that part is cut off.
  */
-async function mixWindow(project: Project, seq: Sequence, sources: Sources, t0: number, t1: number): Promise<AudioBuffer> {
+async function mixWindow(project: Project, seq: Sequence, sources: Sources, t0: number, t1: number, gainDb = 0): Promise<AudioBuffer> {
   const pre = Math.min(PREROLL, t0);
   const start = t0 - pre;
   const ctx = new OfflineAudioContext({ numberOfChannels: 2, length: Math.max(1, Math.round((t1 - start) * RATE)), sampleRate: RATE });
   const master = ctx.createGain();
-  master.gain.value = dbToGain(seq.masterVolume);
+  master.gain.value = dbToGain(seq.masterVolume) * Math.pow(10, gainDb / 20);
   master.connect(ctx.destination);
   const fps = seq.fps;
   const f0 = Math.floor(start * fps);
@@ -346,14 +351,53 @@ export async function exportSequence(project: Project, seq: Sequence, s: ExportS
     const t0 = s.range[0] / seq.fps;
     const t1 = s.range[1] / seq.fps;
     const total = audioOnly ? t1 - t0 : frames.length;
+    // Even loudness: the whole mix is measured first, then made louder or quieter by one amount
+    let gainDb = 0;
+    const measureShare = audio && s.loudness != null ? (audioOnly ? 0.5 : 0.1) : 0;
+    if (audio && s.loudness != null) {
+      const meter = new LoudnessMeter(RATE, 2);
+      for (let w = t0; w < t1 - 1e-6; w += WINDOW) {
+        if (signal.aborted) throw new DOMException('canceled', 'AbortError');
+        const we = Math.min(t1, w + WINDOW);
+        const b = await mixWindow(project, seq, sources, w, we);
+        meter.add([b.getChannelData(0), b.getChannelData(1)]);
+        onProgress({ fraction: ((we - t0) / (t1 - t0)) * measureShare, done: 0, total });
+      }
+      const measured = meter.lufs;
+      gainDb = normalizeGain(measured, s.loudness);
+      onProgress({ fraction: measureShare, done: 0, total, loudness: { measured, gain: gainDb } });
+    }
+    const share = (x: number) => measureShare + x * (1 - measureShare);
+    // Made louder, the peaks are held under -1 dB so nothing clips
+    const limiter = audio && s.loudness != null ? new PeakLimiter(RATE, 2, Math.pow(10, -1 / 20)) : null;
+    let limited = 0;
+    const addSound = async (b: AudioBuffer | null) => {
+      if (!audio) return;
+      if (!limiter) {
+        if (b) await audio.add(b);
+        return;
+      }
+      let out: Float32Array<ArrayBuffer>[] = (b ? limiter.process([b.getChannelData(0), b.getChannelData(1)]) : limiter.flush()) as Float32Array<ArrayBuffer>[];
+      // The limiter runs a few milliseconds late: its first samples are dropped, and the end flushed out
+      if (limited < limiter.delay) {
+        const skip = Math.min(limiter.delay - limited, out[0].length);
+        limited += skip;
+        out = out.map((c) => c.subarray(skip) as Float32Array<ArrayBuffer>);
+      }
+      if (!out[0].length) return;
+      const buf = new AudioBuffer({ length: out[0].length, numberOfChannels: 2, sampleRate: RATE });
+      buf.copyToChannel(out[0], 0);
+      buf.copyToChannel(out[1], 1);
+      await audio.add(buf);
+    };
     let i = 0;
     const preview = document.createElement('canvas');
     for (let w = t0; w < t1 - 1e-6; w += WINDOW) {
       const we = Math.min(t1, w + WINDOW);
       if (signal.aborted) throw new DOMException('canceled', 'AbortError');
-      if (audio) await audio.add(await mixWindow(project, seq, sources, w, we));
+      if (audio) await addSound(await mixWindow(project, seq, sources, w, we, gainDb));
       if (audioOnly) {
-        onProgress({ fraction: (we - t0) / (t1 - t0), done: we - t0, total });
+        onProgress({ fraction: share((we - t0) / (t1 - t0)), done: we - t0, total });
         continue;
       }
       // The frames in this window of time
@@ -367,10 +411,11 @@ export async function exportSequence(project: Project, seq: Sequence, s: ExportS
           preview.width = 320;
           preview.height = Math.round((320 * s.height) / s.width);
           preview.getContext('2d')!.drawImage(canvas!, 0, 0, preview.width, preview.height);
-          onProgress({ fraction: i / total, done: i, total, preview });
+          onProgress({ fraction: share(i / total), done: i, total, preview });
         }
       }
     }
+    await addSound(null);
     onProgress({ fraction: 1, done: total, total });
     await output.finalize();
     ok = true;

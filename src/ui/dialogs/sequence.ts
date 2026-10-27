@@ -1,4 +1,5 @@
 // New sequence / Sequence settings: size and frame rate, from a preset or your own.
+import { reframedSequence } from '../../core/edit';
 import { SEQUENCE_PRESETS, newSequence, type Sequence } from '../../core/project';
 import { FRAME_RATES } from '../../core/time';
 import type { App } from '../app';
@@ -97,4 +98,43 @@ export async function openSequenceSettings(app: App, mode: 'new' | 'edit'): Prom
     s.fps = F;
   });
   app.emit('sequence');
+}
+
+/** Reframe: a copy of the sequence in another shape (vertical for Shorts, Reels and TikTok…). */
+export async function openReframe(app: App): Promise<void> {
+  const s = app.seq;
+  const base = Math.min(s.width, s.height);
+  const even = (n: number) => Math.round(n / 2) * 2;
+  const shapes: [string, string, number, number][] = [
+    ['vertical', 'Vertical 9:16 — Shorts, Reels, TikTok', base, even((base * 16) / 9)],
+    ['portrait', 'Portrait 4:5 — Instagram posts', base, even((base * 5) / 4)],
+    ['square', 'Square 1:1', base, base],
+    ['horizontal', 'Horizontal 16:9 — YouTube', even((base * 16) / 9), base],
+  ];
+  const options = shapes.filter(([, , w, hh]) => Math.abs(w / hh - s.width / s.height) > 0.01);
+  const shape = select(options.map(([id, label, w, hh]) => [id, `${label} (${w} × ${hh})`] as [string, string]), options[0][0]);
+  shape.style.width = '100%';
+  const ok = await dialog(
+    'Reframe sequence',
+    h(
+      'div',
+      { class: 'form' },
+      h('p', { class: 'hint' }, `Makes a copy of ${s.name} in another shape. Videos and pictures fill the new frame, cropped around their middle; titles and positions follow. Adjust a clip's Position in Effect Controls to show a different part.`),
+      field('New shape', shape),
+    ),
+    [
+      { label: 'Make the copy', value: true, primary: true },
+      { label: 'Cancel', value: false },
+    ],
+  );
+  if (!ok) return;
+  const pick = options.find(([id]) => id === shape.value) ?? options[0];
+  const label = pick[1].split(' ')[0];
+  app.edit(`Reframe to ${label.toLowerCase()}`, (seq, p) => {
+    const r = reframedSequence(seq, pick[2], pick[3], `${seq.name} (${label})`);
+    p.sequences.push(r);
+    p.active = r.id;
+  });
+  app.emit('sequence');
+  app.layout.timeline.fit();
 }

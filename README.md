@@ -52,6 +52,10 @@ Frameline is a sister app of [Gridline](https://github.com/LucasHeh47/gridline),
 
 **Clever helpers**
 
+- **Remove pauses** takes the quiet moments out of someone talking — automatic jump cuts, with how quiet and how long you choose.
+- **Beat markers** find the tempo of your music and put a marker on every beat or bar; **Cut at markers** then cuts the selected clips on all of them.
+- **Reframe** makes a vertical (Shorts, Reels, TikTok), portrait or square copy of a sequence, with the pictures filling the new shape.
+- **YouTube chapters**: name your markers and copy them as "0:00 Intro" lines for the video's description.
 - **Scene edit detection** cuts a long video wherever the camera cut.
 - **Speed / Duration** (slow motion, fast motion, reverse) and **frame holds**.
 - The first video you add can set the sequence's size and frame rate.
@@ -59,6 +63,8 @@ Frameline is a sister app of [Gridline](https://github.com/LucasHeh47/gridline),
 
 **Export**
 
+- **Presets** for YouTube, Shorts / Reels / TikTok, a small file to send, a best-quality master and podcasts.
+- **Even loudness**: exports can be brought to −14 LUFS (what YouTube, Spotify and Instagram expect), −16 or −23, with a limiter so nothing clips.
 - **MP4 (H.264)**, **WebM (VP9)** or **MOV**, or just the sound as **M4A** or **WAV**, at the sequence's size or smaller, with a quality choice that picks a sensible bitrate and shows the file size first. The whole sequence or just in to out.
 - Exports use your graphics card's video encoder, so they're fast, and they match the preview frame for frame.
 - **Export Frame** (Ctrl+Shift+E) saves a still as PNG or JPEG.

@@ -2,16 +2,19 @@
 // command search and the keyboard all use these.
 import * as L from 'lucide';
 import type { IconNode } from 'lucide';
-import { addFrameHold, addMarker, addTrack, closeGap, editPoints, liftRange, nudge, razor, removeClips, trimToPlayhead } from '../core/edit';
+import { addFrameHold, addMarker, addTrack, closeGap, editPoints, liftRange, nudge, razor, razorAtMarkers, removeClips, trimToPlayhead } from '../core/edit';
 import { allTracks, clipEnd, findClip, sequenceDuration, sourceTimeAt, TITLE_PRESETS, uid } from '../core/project';
 import type { App } from './app';
 import { h } from './dom';
 import { exportCaptions, importCaptions } from './dialogs/captions';
+import { beatMarkers } from './dialogs/beats';
+import { copyChapters } from './dialogs/chapters';
 import { autoDuck } from './dialogs/ducking';
+import { removePauses } from './dialogs/pauses';
 import { normalizeSelected, openAudioGain } from './dialogs/audioGain';
 import { exportFrame, openExport } from './dialogs/export';
 import { detectScenes } from './dialogs/scenes';
-import { openSequenceSettings } from './dialogs/sequence';
+import { openReframe, openSequenceSettings } from './dialogs/sequence';
 import { openSpeed } from './dialogs/speed';
 import { showAbout, showShortcuts } from './help';
 import { WORKSPACES } from './layout';
@@ -242,6 +245,11 @@ export class Commands {
     a({ id: 'clip.scenes', title: 'Scene edit detection…', category: 'Clip', icon: L.ScanLine, keywords: 'cut detect shots split automatically', enabled: () => app.selectedClips().some((x) => x.clip.kind === 'video'), run: () => detectScenes(app) });
     a({ id: 'clip.audioGain', title: 'Audio gain…', category: 'Clip', icon: L.AudioLines, keys: ['G'], keywords: 'louder quieter volume normalize', enabled: () => app.selectedClips().some((x) => x.clip.kind === 'audio'), run: () => openAudioGain(app) });
     a({ id: 'clip.duck', title: 'Auto-duck music…', category: 'Clip', icon: L.AudioLines, keywords: 'ducking lower music under voice speech dialogue background', enabled: () => app.selectedClips().some((x) => x.clip.kind === 'audio'), run: () => autoDuck(app) });
+    a({ id: 'clip.removePauses', title: 'Remove pauses (jump cuts)…', category: 'Clip', icon: L.ScissorsLineDashed, keywords: 'silence silent quiet jump cut talking speech gaps dead air', enabled: () => app.selectedClips().some((x) => x.clip.kind === 'audio' || !!x.clip.linkId), run: () => removePauses(app) });
+    a({ id: 'clip.cutAtMarkers', title: 'Cut at markers', category: 'Clip', icon: L.Scissors, keywords: 'beat split razor markers music', enabled: () => hasSel() && s().markers.length > 0, run: () => {
+      const ids = new Set(app.selection);
+      if (!app.edit('Cut at markers', (seq) => razorAtMarkers(seq, ids) > 0)) toast('No markers inside the selected clips.');
+    } });
     a({ id: 'clip.normalize', title: 'Normalize audio', category: 'Clip', icon: L.AudioWaveform, keywords: 'loudness level peak', enabled: () => app.selectedClips().some((x) => x.clip.kind === 'audio'), run: () => normalizeSelected(app, -1) });
     a({ id: 'clip.rename', title: 'Rename…', category: 'Clip', enabled: hasSel, run: async () => {
       const first = app.selectedClips()[0];
@@ -273,6 +281,7 @@ export class Commands {
 
     // ---------- Sequence ----------
     a({ id: 'sequence.settings', title: 'Sequence settings…', category: 'Sequence', icon: L.Settings2, keywords: 'resolution frame rate size', run: () => openSequenceSettings(app, 'edit') });
+    a({ id: 'sequence.reframe', title: 'Reframe sequence…', category: 'Sequence', icon: L.RectangleVertical, keywords: 'vertical shorts reels tiktok square portrait instagram crop aspect auto reframe', run: () => openReframe(app) });
     a({ id: 'sequence.razor', title: 'Add edit (cut at the playhead)', category: 'Sequence', icon: L.Scissors, keys: ['Ctrl+K'], keywords: 'razor split cut', run: () => {
       const f = app.playhead;
       const only = app.selection.size ? new Set(app.selection) : undefined;
@@ -367,6 +376,8 @@ export class Commands {
       if (m) go(m.f);
     } });
     a({ id: 'marker.clear', title: 'Clear marker at playhead', category: 'Markers', keys: ['Ctrl+Alt+M'], enabled: () => s().markers.some((m) => m.f === app.playhead), run: () => app.edit('Clear marker', (seq) => void (seq.markers = seq.markers.filter((m) => m.f !== app.playhead))) });
+    a({ id: 'marker.beats', title: 'Add beat markers…', category: 'Markers', icon: L.Music, keywords: 'music beat tempo bpm rhythm cut to the beat', enabled: () => app.selectedClips().some((x) => x.clip.kind === 'audio' || !!x.clip.linkId), run: () => beatMarkers(app) });
+    a({ id: 'marker.chapters', title: 'Copy markers as YouTube chapters', category: 'Markers', icon: L.ListOrdered, keywords: 'youtube chapters timestamps description', enabled: () => s().markers.length > 0, run: () => copyChapters(app) });
     a({ id: 'marker.clearAll', title: 'Clear all markers', category: 'Markers', enabled: () => s().markers.length > 0, run: () => app.edit('Clear all markers', (seq) => void (seq.markers = [])) });
 
     // ---------- Graphics ----------

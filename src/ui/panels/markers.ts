@@ -17,7 +17,9 @@ export class MarkersPanel implements Panel {
     this.list = h('div', { class: 'mk-list' });
     const add = h('button', { class: 'btn small outline', onclick: () => app.commands.run('marker.add') }, icon(L.Plus, 13), 'Add at playhead');
     tooltip(add, 'Add a marker at the playhead', 'M');
-    this.el = h('div', { class: 'markers-panel' }, h('div', { class: 'proj-bar' }, add), this.list);
+    const chapters = h('button', { class: 'btn small text', onclick: () => app.commands.run('marker.chapters') }, icon(L.ListOrdered, 13), 'Copy as YouTube chapters');
+    tooltip(chapters, 'Copies "0:00 Name" lines for your video description');
+    this.el = h('div', { class: 'markers-panel' }, h('div', { class: 'proj-bar' }, add, chapters), this.list);
     for (const k of ['project', 'sequence', 'playhead'] as const) app.on(k, () => this.render());
     this.render();
   }

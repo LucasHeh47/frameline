@@ -26,6 +26,35 @@ const QUALITY: [string, string, number][] = [
   ['max', 'Best', 0.2],
 ];
 
+const LOUDNESS: [string, string][] = [
+  ['off', 'As mixed'],
+  ['-14', '−14 LUFS — YouTube, Spotify, Instagram, TikTok'],
+  ['-16', '−16 LUFS — podcasts, Apple'],
+  ['-23', '−23 LUFS — TV broadcast'],
+];
+
+interface Preset {
+  id: string;
+  name: string;
+  format: ExportFormat;
+  /** Short side in pixels, or 'match'. */
+  size: string;
+  quality: string;
+  audioBitrate: string;
+  loudness: string;
+  /** Advice when the sequence's shape doesn't suit it. */
+  shape?: 'vertical' | 'horizontal';
+}
+
+const PRESETS: Preset[] = [
+  { id: 'youtube', name: 'YouTube 1080p', format: 'mp4', size: '1080', quality: 'high', audioBitrate: '192000', loudness: '-14', shape: 'horizontal' },
+  { id: 'youtube4k', name: 'YouTube 4K', format: 'mp4', size: 'match', quality: 'high', audioBitrate: '256000', loudness: '-14', shape: 'horizontal' },
+  { id: 'shorts', name: 'Shorts, Reels and TikTok (vertical 1080p)', format: 'mp4', size: '1080', quality: 'high', audioBitrate: '192000', loudness: '-14', shape: 'vertical' },
+  { id: 'share', name: 'Small file to send (720p)', format: 'mp4', size: '720', quality: 'low', audioBitrate: '128000', loudness: 'off' },
+  { id: 'master', name: 'Best quality master (MOV)', format: 'mov', size: 'match', quality: 'max', audioBitrate: '320000', loudness: 'off' },
+  { id: 'podcast', name: 'Podcast or voice (M4A sound)', format: 'm4a', size: 'match', quality: 'high', audioBitrate: '128000', loudness: '-16' },
+];
+
 /** Bits per second for a quality at a size and frame rate (bits per pixel per frame). */
 function bitrateFor(q: string, w: number, h: number, fps: number): number {
   const bpp = QUALITY.find((x) => x[0] === q)?.[2] ?? 0.12;
@@ -40,7 +69,13 @@ export async function openExport(app: App): Promise<void> {
     return;
   }
   app.player.pause();
-  const last = (app.prefs.export ?? {}) as Partial<{ format: ExportFormat; size: string; fps: string; quality: string; audioBitrate: string; audio: boolean }>;
+  const last = (app.prefs.export ?? {}) as Partial<{ format: ExportFormat; size: string; fps: string; quality: string; audioBitrate: string; audio: boolean; loudness: string; preset: string }>;
+  const short = Math.min(s.width, s.height);
+  const presets = PRESETS.filter((p) => p.id !== 'youtube4k' || short >= 2160);
+  const preset = select([['custom', 'Custom'], ...presets.map((p) => [p.id, p.name] as [string, string])], presets.some((p) => p.id === last.preset) ? last.preset! : 'custom');
+  preset.style.width = '100%';
+  const presetHint = h('p', { class: 'hint' });
+  const loudness = select(LOUDNESS, LOUDNESS.some((x) => x[0] === last.loudness) ? last.loudness! : 'off');
   const format = select(FORMATS.map(([v, l]) => [v, l] as [string, string]), last.format ?? 'mp4');
   format.style.width = '100%';
   const formatHint = h('p', { class: 'hint' });
@@ -92,9 +127,38 @@ export async function openExport(app: App): Promise<void> {
       range: [a, Math.max(a + 1, b)],
       hardware: hw.input.checked ? 'no-preference' : 'prefer-software',
       audio: audio.input.checked || isAudioOnly(f),
+      loudness: loudness.value === 'off' ? null : Number(loudness.value),
     };
   };
-  const update = () => {
+  preset.addEventListener('change', () => {
+    const p = PRESETS.find((x) => x.id === preset.value);
+    if (!p) return update();
+    format.value = p.format;
+    // A smaller size only when the sequence is bigger than it
+    size.value = sizes.some((x) => x[0] === p.size) ? p.size : 'match';
+    quality.value = p.quality;
+    audioRate.value = p.audioBitrate;
+    loudness.value = p.loudness;
+    if (!isAudioOnly(p.format)) audio.input.checked = true;
+    update();
+  });
+  // Changing a setting by hand makes it a custom export
+  for (const el of [format, size, fps, quality, audioRate, loudness])
+    el.addEventListener('change', () => {
+      const p = PRESETS.find((x) => x.id === preset.value);
+      if (p && (format.value !== p.format || quality.value !== p.quality || audioRate.value !== p.audioBitrate || loudness.value !== p.loudness)) preset.value = 'custom';
+      update();
+    });
+  function update(): void {
+    const p = PRESETS.find((x) => x.id === preset.value);
+    const vertical = s.height > s.width;
+    presetHint.textContent =
+      p?.shape === 'vertical' && !vertical
+        ? 'Your sequence is horizontal, so the video would have black bars. Sequence › Reframe sequence makes a vertical copy.'
+        : p?.shape === 'horizontal' && vertical
+          ? 'Your sequence is vertical; YouTube shows it with bars at the sides (or as a Short when it is under 3 minutes).'
+          : '';
+    presetHint.hidden = !presetHint.textContent;
     const f = format.value as ExportFormat;
     formatHint.textContent = FORMATS.find((x) => x[0] === f)?.[2] ?? '';
     videoFields.hidden = isAudioOnly(f);
@@ -103,18 +167,30 @@ export async function openExport(app: App): Promise<void> {
     const secs = (st.range[1] - st.range[0]) / s.fps;
     const bits = (isAudioOnly(f) ? 0 : st.videoBitrate) + (st.audio ? (f === 'wav' ? 48000 * 16 * 2 : st.audioBitrate) : 0);
     estimate.textContent = `${timecode(st.range[1] - st.range[0], s.fps)} · ${isAudioOnly(f) ? '' : `${st.width} × ${st.height}, ${Math.round(st.fps * 100) / 100} fps, ${(st.videoBitrate / 1e6).toFixed(1)} Mbps · `}about ${formatBytes(Math.round((bits * secs) / 8))}`;
-  };
-  for (const el of [format, size, fps, quality, audioRate, range]) el.addEventListener('change', update);
+  }
+  range.addEventListener('change', update);
   audio.input.addEventListener('change', update);
   update();
-  const body = h('div', { class: 'form export-form' }, field('Format', format), formatHint, videoFields, row(field('Sound quality', audioRate), audio.el), field('What to export', range), estimate);
+  const body = h(
+    'div',
+    { class: 'form export-form' },
+    field('Preset', preset),
+    presetHint,
+    field('Format', format),
+    formatHint,
+    videoFields,
+    row(field('Sound quality', audioRate), audio.el),
+    field('Loudness', loudness, "Makes the whole video as loud as these sites expect, so it isn't turned down or too quiet"),
+    field('What to export', range),
+    estimate,
+  );
   const ok = await dialog('Export', body, [
     { label: 'Export…', value: true, primary: true },
     { label: 'Cancel', value: false },
   ]);
   if (!ok) return;
   const st = settings();
-  app.prefs.export = { format: st.format, size: size.value, fps: fps.value, quality: quality.value, audioBitrate: audioRate.value, audio: audio.input.checked };
+  app.prefs.export = { format: st.format, size: size.value, fps: fps.value, quality: quality.value, audioBitrate: audioRate.value, audio: audio.input.checked, loudness: loudness.value, preset: preset.value };
   app.savePrefs();
   if (!isAudioOnly(st.format) && !(await canEncodeVideo(st.format === 'webm' ? 'vp9' : 'avc', { width: st.width, height: st.height }))) {
     toast(`This computer can't encode ${st.format === 'webm' ? 'VP9' : 'H.264'} video at ${st.width} × ${st.height}. Try a smaller size or another format.`, { kind: 'error' });
@@ -130,6 +206,7 @@ async function run(app: App, st: ExportSettings, path: string): Promise<void> {
   const preview = h('canvas', { class: 'export-preview' }) as HTMLCanvasElement;
   if (!isAudioOnly(st.format)) prog.body.append(preview);
   const started = performance.now();
+  let level: { measured: number; gain: number } | undefined;
   const ctrl = new AbortController();
   const watch = setInterval(() => {
     if (prog.canceled) ctrl.abort();
@@ -143,6 +220,7 @@ async function run(app: App, st: ExportSettings, path: string): Promise<void> {
       path,
       app.library,
       (p) => {
+        if (p.loudness) level = p.loudness;
         const secs = (performance.now() - started) / 1000;
         const left = p.fraction > 0.02 ? (secs / p.fraction) * (1 - p.fraction) : null;
         prog.set(p.fraction, `${Math.round(p.fraction * 100)}%${left !== null ? ` · about ${left < 60 ? `${Math.ceil(left)} s` : `${Math.ceil(left / 60)} min`} left` : ''}`);
@@ -161,7 +239,8 @@ async function run(app: App, st: ExportSettings, path: string): Promise<void> {
     }
     const secs = Math.round((performance.now() - started) / 1000);
     const name = path.split(/[\\/]/).pop();
-    toast(`Exported ${name} in ${secs < 60 ? `${secs} s` : `${Math.floor(secs / 60)} min ${secs % 60} s`}.`, { kind: 'success', ms: 9000, action: platform.isDesktop ? { label: 'Show in folder', run: () => platform.showInFolder(path) } : undefined });
+    const loudNote = level && Number.isFinite(level.measured) && Math.abs(level.gain) >= 0.1 ? ` The sound was ${level.measured.toFixed(1)} LUFS and was made ${Math.abs(level.gain).toFixed(1)} dB ${level.gain >= 0 ? 'louder' : 'quieter'}.` : '';
+    toast(`Exported ${name} in ${secs < 60 ? `${secs} s` : `${Math.floor(secs / 60)} min ${secs % 60} s`}.${loudNote}`, { kind: 'success', ms: 9000, action: platform.isDesktop ? { label: 'Show in folder', run: () => platform.showInFolder(path) } : undefined });
     if (app.settings.bool('export.openFolder')) platform.showInFolder(path);
   } catch (err) {
     prog.close();
