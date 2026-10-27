@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Smoother playback.** While playing, Frameline redid a lot of work on every frame: the timeline (waveforms and all) was redrawn just to move the playhead, panels made the page lay itself out again, the play button and every keyframe row were rebuilt, and the Markers list was rebuilt (which also interrupted typing a marker's name). It now does about a third of the work.
+- **Fixed a leak** that added listeners to the duration readout on every frame while playing.
+- Filmstrip thumbnails and the waveforms of long files are worked out faster.
+- **Checking for updates** no longer says something went wrong when there's no regular release yet.
+
 ## 0.1.0
 
 The first version of Frameline, a video editor in the style of Premiere Pro.

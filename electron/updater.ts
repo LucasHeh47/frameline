@@ -141,7 +141,10 @@ export function setupUpdates(): void {
   autoUpdater.on('download-progress', (p: ProgressInfo) => setState({ status: 'downloading', percent: Math.round(p.percent) }));
   autoUpdater.on('update-downloaded', (info: UpdateInfo) => setState({ status: 'downloaded', version: info.version, percent: 100 }));
   autoUpdater.on('error', (err: Error) => {
-    if (state.status === 'downloading' || state.status === 'checking') setState({ status: 'error', error: friendlyError(err) });
+    // A check deals with its own errors (no release yet just means there's nothing newer); this
+    // event comes first and would show an error for it
+    if (checking) return;
+    if (state.status === 'downloading') setState({ status: 'error', error: friendlyError(err) });
   });
 
   ipcMain.handle('updates:check', (_e, opts: UpdateCheckOptions) => check({ silent: !!opts?.silent, allowPrerelease: !!opts?.allowPrerelease, autoDownload: !!opts?.autoDownload }));
