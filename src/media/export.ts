@@ -5,13 +5,13 @@ import { AudioBufferSink, AudioBufferSource, CanvasSource, Input, Mp4OutputForma
 import { valueAt } from '../core/anim';
 import { LoudnessMeter, normalizeGain, PeakLimiter } from '../core/audioAnalysis';
 import { strParam } from '../core/effects';
-import { allTracks, mediaOf, sourceTimeAt, type Clip, type MediaItem, type Project, type Sequence, type Track } from '../core/project';
+import { allTracks, clipStream, mediaOf, sourceTimeAt, type AudioStream, type Clip, type MediaItem, type Project, type Sequence, type Track } from '../core/project';
 import { activeRange, audibleTracks, audioFade, clipGain, dbToGain, videoAt } from '../core/timeline';
 import { Compositor, type Picture, type PictureProvider } from '../render/compositor';
 import { platform } from '../ui/platform';
 import { buildChain } from './audioGraph';
 import type { MediaLibrary } from './library';
-import { openInput } from './probe';
+import { openInput, soundTrackOf } from './probe';
 
 export type ExportFormat = 'mp4' | 'webm' | 'mov' | 'm4a' | 'wav';
 
@@ -69,11 +69,12 @@ class Sources {
     return t;
   }
 
-  audio(path: string): Promise<InputAudioTrack | null> {
-    let t = this.audioTracks.get(path);
+  audio(path: string, stream?: AudioStream): Promise<InputAudioTrack | null> {
+    const key = `${path}#${stream?.id ?? ''}`;
+    let t = this.audioTracks.get(key);
     if (!t) {
-      t = this.input(path).getPrimaryAudioTrack();
-      this.audioTracks.set(path, t);
+      t = soundTrackOf(this.input(path), stream);
+      this.audioTracks.set(key, t);
     }
     return t;
   }
@@ -258,7 +259,7 @@ async function mixWindow(project: Project, seq: Sequence, sources: Sources, t0: 
 
 async function scheduleClip(ctx: OfflineAudioContext, sources: Sources, seq: Sequence, t: Track, c: Clip, m: MediaItem, fa: number, fb: number, at: (f: number) => number, bus: AudioNode): Promise<void> {
   const fps = seq.fps;
-  const track = await sources.audio(m.path);
+  const track = await sources.audio(m.path, clipStream(m, c));
   if (!track) return;
   const ta = sourceTimeAt(c, fa, fps);
   const tb = sourceTimeAt(c, fb, fps);

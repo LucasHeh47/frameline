@@ -5,6 +5,17 @@ import type { Effect, ParamValue } from './effects';
 
 export type MediaKind = 'video' | 'audio' | 'image';
 
+/** One of the sound tracks in a file (game, microphone and music in a screen recording, say). */
+export interface AudioStream {
+  /** The track's number in the file. */
+  id: number;
+  /** Its place among the file's sound tracks (0 is the first). */
+  index: number;
+  name: string;
+  channels: number;
+  sampleRate: number;
+}
+
 export interface MediaItem {
   id: string;
   kind: MediaKind;
@@ -23,6 +34,8 @@ export interface MediaItem {
   sampleRate: number;
   /** Degrees the file says to turn its frames (phone videos). */
   rotation?: number;
+  /** A file with more than one sound track: each of them, each placed on its own audio track (empty with one). */
+  streams?: AudioStream[];
   /** When the file was last changed (to notice a different file at the same place). */
   modified?: number;
   size?: number;
@@ -157,6 +170,8 @@ export interface Clip {
   hold?: number;
   /** Clips with the same link move, trim and select together (a video and its sound). */
   linkId?: string;
+  /** Which of its file's sound tracks an audio clip plays (files with several; 0 is the first). */
+  stream?: number;
   enabled: boolean;
   label?: string;
   // Picture
@@ -355,6 +370,11 @@ export function sequenceDuration(s: Sequence): number {
 
 export function activeSequence(p: Project): Sequence {
   return p.sequences.find((s) => s.id === p.active) ?? p.sequences[0];
+}
+
+/** The sound track of its file an audio clip plays (only for files with several). */
+export function clipStream(m: MediaItem | undefined, c: Pick<Clip, 'stream'>): AudioStream | undefined {
+  return m?.streams?.length ? (m.streams[c.stream ?? 0] ?? m.streams[0]) : undefined;
 }
 
 export function mediaOf(p: Project, c: Clip): MediaItem | undefined {

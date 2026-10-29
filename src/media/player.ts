@@ -2,7 +2,7 @@
 // sound of each clip through Web Audio (its volume, balance and effects, then its track's level and
 // the master level, with meters). The compositor draws the elements' current frames.
 import type { Effect } from '../core/effects';
-import { mediaOf, sequenceDuration, sourceTimeAt, type Clip, type MediaItem, type Project, type Sequence, type Track } from '../core/project';
+import { clipStream, mediaOf, sequenceDuration, sourceTimeAt, type AudioStream, type Clip, type MediaItem, type Project, type Sequence, type Track } from '../core/project';
 import { audioAt, dbToGain, videoAt } from '../core/timeline';
 import type { Picture, PictureProvider } from '../render/compositor';
 import { platform } from '../ui/platform';
@@ -25,6 +25,8 @@ interface VideoVoice {
 interface AudioVoice {
   el: HTMLAudioElement;
   path: string;
+  /** The file's sound track it plays (files with several), or '' for the file's own choice. */
+  stream: string;
   source: MediaElementAudioSourceNode;
   fx: FxChain;
   effects: Effect[];
@@ -37,6 +39,21 @@ interface Bus {
   gain: GainNode;
   pan: StereoPannerNode;
   meters: [AnalyserNode, AnalyserNode];
+}
+
+interface SoundTrackList {
+  length: number;
+  [i: number]: { id: string; enabled: boolean };
+}
+
+/** Makes a media element play one of its file's sound tracks (and none of the others). */
+function chooseSoundTrack(el: HTMLMediaElement, s: AudioStream): void {
+  const list = (el as HTMLMediaElement & { audioTracks?: SoundTrackList }).audioTracks;
+  if (!list?.length) return;
+  let want = -1;
+  for (let i = 0; i < list.length; i++) if (list[i].id === String(s.id)) want = i;
+  if (want < 0) want = Math.min(s.index, list.length - 1);
+  for (let i = 0; i < list.length; i++) list[i].enabled = i === want;
 }
 
 /** A tiny bit past the frame's start, so the frame itself is shown (not the one before). */
@@ -59,7 +76,7 @@ export class Player implements PictureProvider {
   private videos = new Map<string, VideoVoice>();
   private audios = new Map<string, AudioVoice>();
   private videoPool: { path: string; el: HTMLVideoElement }[] = [];
-  private audioPool: { path: string; el: HTMLAudioElement; source: MediaElementAudioSourceNode }[] = [];
+  private audioPool: { path: string; stream: string; el: HTMLAudioElement; source: MediaElementAudioSourceNode }[] = [];
   private renderQueued = false;
   /** Called on every frame while playing, and after seeks: redraw the monitor and the playhead. */
   onFrame: ((frame: number) => void) | null = null;
@@ -305,8 +322,10 @@ export class Player implements PictureProvider {
   private syncAudio(clip: Clip, track: Track, time: number, local: number, fade: number, m: MediaItem | undefined, inMedia: boolean): void {
     if (!m || !m.hasAudio || this.host.library.missing.has(m.id) || clip.reverse || clip.hold !== undefined) return;
     const ctx = this.audio();
+    const stream = clipStream(m, clip);
+    const streamKey = stream ? String(stream.id) : '';
     let a = this.audios.get(clip.id);
-    if (a && (a.path !== m.path || a.track !== track.id)) {
+    if (a && (a.path !== m.path || a.track !== track.id || a.stream !== streamKey)) {
       this.releaseAudio(clip.id, a);
       a = undefined;
     }
@@ -317,7 +336,7 @@ export class Player implements PictureProvider {
       a.source.connect(a.fx.input);
       a.fx.output.connect(a.gain);
     }
-    a ??= this.allocAudio(clip, track, m.path);
+    a ??= this.allocAudio(clip, track, m.path, stream);
     a.effects = clip.effects;
     a.fx.update(local);
     const lv = clipLevels(clip.volume, clip.pan, local);
@@ -338,9 +357,10 @@ export class Player implements PictureProvider {
     } else if (Math.abs(el.currentTime - time) > 0.12 * Math.max(1, r)) el.currentTime = time;
   }
 
-  private allocAudio(clip: Clip, track: Track, path: string): AudioVoice {
+  private allocAudio(clip: Clip, track: Track, path: string, stream?: AudioStream): AudioVoice {
     const ctx = this.audio();
-    const i = this.audioPool.findIndex((p) => p.path === path);
+    const key = stream ? String(stream.id) : '';
+    const i = this.audioPool.findIndex((p) => p.path === path && p.stream === key);
     let el: HTMLAudioElement;
     let source: MediaElementAudioSourceNode;
     if (i >= 0) ({ el, source } = this.audioPool.splice(i, 1)[0]);
@@ -350,6 +370,11 @@ export class Player implements PictureProvider {
       el.preload = 'auto';
       // Speed changes the pitch, as it does in the export
       el.preservesPitch = false;
+      if (stream) {
+        // A file with several sound tracks: this element plays just the clip's one
+        const pick = () => chooseSoundTrack(el, stream);
+        el.addEventListener('loadedmetadata', pick);
+      }
       el.src = platform.mediaUrl(path);
       source = ctx.createMediaElementSource(el);
     }
@@ -360,7 +385,7 @@ export class Player implements PictureProvider {
     fx.output.connect(gain);
     gain.connect(pan);
     pan.connect(this.bus(track).gain);
-    const a: AudioVoice = { el, path, source, fx, effects: clip.effects, gain, pan, track: track.id };
+    const a: AudioVoice = { el, path, stream: key, source, fx, effects: clip.effects, gain, pan, track: track.id };
     this.audios.set(clip.id, a);
     return a;
   }
@@ -372,7 +397,7 @@ export class Player implements PictureProvider {
     a.fx.dispose();
     a.gain.disconnect();
     a.pan.disconnect();
-    this.audioPool.push({ path: a.path, el: a.el, source: a.source });
+    this.audioPool.push({ path: a.path, stream: a.stream, el: a.el, source: a.source });
     while (this.audioPool.length > 8) {
       const old = this.audioPool.shift()!;
       old.el.removeAttribute('src');

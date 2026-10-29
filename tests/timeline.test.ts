@@ -4,7 +4,7 @@ import { parseCaptions, writeSrt, writeVtt } from '../src/core/captions';
 import { applyTransition } from '../src/core/edit';
 import { History } from '../src/core/history';
 import { applyLut, parseCube } from '../src/core/lut';
-import { clipFromMedia, newProject, newSequence, readProject, writeProject, type MediaItem } from '../src/core/project';
+import { clipFromMedia, clipStream, newProject, newSequence, readProject, writeProject, type MediaItem } from '../src/core/project';
 import { parseTimecode, shortDuration, timecode } from '../src/core/time';
 import { audioAt, fadeCurve, snapShift, videoAt } from '../src/core/timeline';
 
@@ -148,5 +148,29 @@ describe('saving, history, captions and LUTs', () => {
     expect(out[0]).toBeCloseTo(0.75);
     expect(out[1]).toBeCloseTo(0.5);
     expect(out[2]).toBeCloseTo(0);
+  });
+});
+
+describe('files with several sound tracks', () => {
+  const streams = ['Game', 'Mic', 'Music'].map((name, index) => ({ id: index + 2, index, name, channels: 2, sampleRate: 48000 }));
+  const rec: MediaItem = { ...MEDIA, id: 'm2', name: 'rec.mp4', streams };
+
+  it('finds the sound track a clip plays', () => {
+    const s = newSequence('S', 1920, 1080, 30);
+    const c = clipFromMedia(rec, s, { start: 0, duration: 30 }, 'audio');
+    expect(clipStream(rec, c)?.name).toBe('Game');
+    expect(clipStream(rec, { ...c, stream: 1 })?.name).toBe('Mic');
+    // A stream that's gone (the file was swapped for one with fewer) falls back to the first
+    expect(clipStream(rec, { ...c, stream: 7 })?.name).toBe('Game');
+    // Files with one sound track don't pick one
+    expect(clipStream(MEDIA, { ...c, stream: 1 })).toBeUndefined();
+    expect(clipStream({ ...MEDIA, streams: [] }, c)).toBeUndefined();
+  });
+
+  it('keeps them in saved projects', () => {
+    const p = newProject('P');
+    p.media.push(rec);
+    const back = readProject(writeProject(p));
+    expect(back.media[0].streams?.map((x) => x.name)).toEqual(['Game', 'Mic', 'Music']);
   });
 });

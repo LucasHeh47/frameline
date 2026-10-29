@@ -66,6 +66,9 @@ async function info(p: string): Promise<MediaFileInfo | null> {
 
 // ---------- media:// (streams files to the UI, with byte ranges so videos can seek) ----------
 
+// Media elements can play any of a file's sound tracks (screen recordings keep game and mic apart)
+app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks');
+
 protocol.registerSchemesAsPrivileged([{ scheme: 'media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }]);
 
 function serveMedia(): void {

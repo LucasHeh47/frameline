@@ -760,7 +760,7 @@ export class Timeline implements Panel {
   }
 
   private drawWave(ctx: CanvasRenderingContext2D, c: Clip, m: NonNullable<ReturnType<typeof mediaOf>>, x0: number, x1: number, top: number, hh: number): void {
-    const peaks = this.app.library.peaksOf(m);
+    const peaks = this.app.library.peaksOf(m, c.stream ?? 0);
     if (!peaks) return;
     const fps = this.fps;
     const mid = top + hh / 2;

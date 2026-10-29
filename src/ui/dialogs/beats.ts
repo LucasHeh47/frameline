@@ -21,7 +21,7 @@ export async function beatMarkers(app: App): Promise<void> {
     return;
   }
   const m = mediaOf(app.project!, pick);
-  const peaks = m?.hasAudio ? app.library.peaksOf(m) : null;
+  const peaks = m?.hasAudio ? app.library.peaksOf(m, pick.stream ?? 0) : null;
   if (!m || !peaks) {
     toast(`Still reading the sound of ${pick.name}. Try again in a moment.`);
     return;

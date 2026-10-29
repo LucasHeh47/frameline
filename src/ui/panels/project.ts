@@ -480,6 +480,7 @@ export class ProjectPanel implements Panel {
     if (m.kind !== 'image') rows.push(['Length', `${clockTime(m.duration)} (${m.duration.toFixed(2)} seconds)`]);
     if (m.fps) rows.push(['Frame rate', `${Math.round(m.fps * 1000) / 1000} fps`]);
     if (m.hasAudio) rows.push(['Sound', `${m.channels === 1 ? 'Mono' : m.channels === 2 ? 'Stereo' : `${m.channels} channels`}, ${(m.sampleRate / 1000).toFixed(1)} kHz`]);
+    if (m.streams?.length) rows.push(['Sound tracks', `${m.streams.length}: ${m.streams.map((x) => x.name).join(', ')}`]);
     if (m.size) rows.push(['File size', m.size > 1e9 ? `${(m.size / 1e9).toFixed(2)} GB` : `${(m.size / 1e6).toFixed(1)} MB`]);
     const used = this.used(m);
     rows.push(['Used', used ? `${used} time${used === 1 ? '' : 's'} in the project's sequences` : 'Not on any timeline yet']);

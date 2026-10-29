@@ -8,7 +8,7 @@ import { dialog, toast } from '../widgets';
 function clipPeakDb(app: App, c: Clip): number | null {
   const m = mediaOf(app.project!, c);
   if (!m) return null;
-  const peaks = app.library.peaksOf(m);
+  const peaks = app.library.peaksOf(m, c.stream ?? 0);
   if (!peaks) return null;
   const a = sourceTimeAt(c, c.start, app.fps);
   const b = sourceTimeAt(c, c.start + c.duration - 1, app.fps);

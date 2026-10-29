@@ -26,7 +26,7 @@ import {
 import { secondsToFrames } from '../core/time';
 import { MediaLibrary } from '../media/library';
 import { Player } from '../media/player';
-import { probeMedia } from '../media/probe';
+import { probeMedia, probeStreams } from '../media/probe';
 import type { MediaFileInfo } from '../shared/api';
 import { Commands, eventKey } from './commands';
 import { h } from './dom';
@@ -492,6 +492,11 @@ export class App {
    */
   async placeMedia(items: MediaItem[], at: number, track: Track | null, mode: PlaceMode, parts: 'both' | 'video' | 'audio' = 'both', range?: { in: number; out: number }): Promise<void> {
     if (!items.length || !this.project) return;
+    // Files imported before Frameline read every sound track: look now (each one gets its own track)
+    for (const m of items) {
+      if (!m.hasAudio || m.kind === 'image' || m.streams || this.library.missing.has(m.id)) continue;
+      m.streams = await probeStreams(m.path).catch(() => []);
+    }
     if (parts !== 'audio') await this.matchSequence(items[0]);
     const fit = this.settings.str('media.fit') as Clip['fit'];
     const placed: string[] = [];
@@ -504,7 +509,9 @@ export class App {
         const inSec = range && items.length === 1 ? range.in : 0;
         const outSec = range && items.length === 1 ? range.out : m.duration;
         const dur = m.kind === 'image' ? this.stillFrames : Math.max(1, secondsToFrames(outSec - inSec, s.fps));
-        const link = m.hasVideo && m.hasAudio && parts === 'both' ? uid('l') : undefined;
+        const streams = m.streams?.length ? m.streams : null;
+        // A picture and its sound move together, and so do a file's sound tracks
+        const link = (m.hasVideo && m.hasAudio && parts === 'both') || (streams && parts !== 'video') ? uid('l') : undefined;
         if (m.hasVideo && parts !== 'audio') {
           // A picture smaller than the frame (a logo) keeps its size instead of being blown up
           const small = m.kind === 'image' && m.width <= s.width && m.height <= s.height;
@@ -514,10 +521,19 @@ export class App {
           items2.push({ track: vt, clip: c });
         }
         if (m.hasAudio && parts !== 'video') {
-          const c = clipFromMedia(m, s, { start: f, duration: dur }, 'audio');
-          c.in = inSec;
-          c.linkId = link;
-          items2.push({ track: at2, clip: c });
+          // Every sound track of the file on its own audio track (A1, A2, A3… for game, mic, music)
+          (streams ?? [null]).forEach((st, k) => {
+            const c = clipFromMedia(m, s, { start: f, duration: dur }, 'audio');
+            c.in = inSec;
+            c.linkId = link;
+            if (st) {
+              c.stream = k;
+              c.name = `${m.name} · ${st.name}`;
+            }
+            const i = s.audio.indexOf(at2) + k;
+            while (s.audio.length <= i) addTrack(s, 'audio');
+            items2.push({ track: s.audio[i], clip: c });
+          });
         }
         f += dur;
       }

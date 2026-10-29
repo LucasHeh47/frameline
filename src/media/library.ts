@@ -4,7 +4,7 @@
 import { AudioBufferSink, CanvasSink } from 'mediabunny';
 import type { MediaItem } from '../core/project';
 import { platform } from '../ui/platform';
-import { openInput } from './probe';
+import { openInput, soundTrackOf } from './probe';
 
 export interface Thumbs {
   /** Media seconds of each thumbnail. */
@@ -40,7 +40,7 @@ export class MediaLibrary {
   private peaks = new Map<string, Peaks>();
   private stills = new Map<string, ImageBitmap>();
   private loading = new Set<string>();
-  private queue: { m: MediaItem; job: 'thumbs' | 'peaks' | 'still' }[] = [];
+  private queue: { m: MediaItem; job: 'thumbs' | 'peaks' | 'still'; stream: number }[] = [];
   private busy = false;
   /** Files that aren't where the project says (they need relinking). */
   readonly missing = new Set<string>();
@@ -64,9 +64,11 @@ export class MediaLibrary {
     return t ?? null;
   }
 
-  peaksOf(m: MediaItem): Peaks | null {
-    const p = this.peaks.get(m.id);
-    if (!p && m.hasAudio) this.request(m, 'peaks');
+  /** A sound track's waveform (`stream`: which of the file's sound tracks, for files with several). */
+  peaksOf(m: MediaItem, stream = 0): Peaks | null {
+    const s = m.streams?.length ? Math.min(stream, m.streams.length - 1) : 0;
+    const p = this.peaks.get(s ? `${m.id}:${s}` : m.id);
+    if (!p && m.hasAudio) this.request(m, 'peaks', s);
     return p ?? null;
   }
 
@@ -114,7 +116,7 @@ export class MediaLibrary {
   /** Forgets what was made for a media item (after relinking it to another file). */
   forget(id: string): void {
     this.thumbs.delete(id);
-    this.peaks.delete(id);
+    for (const k of [...this.peaks.keys()]) if (k === id || k.startsWith(`${id}:`)) this.peaks.delete(k);
     this.stills.get(id)?.close();
     this.stills.delete(id);
     this.missing.delete(id);
@@ -122,15 +124,15 @@ export class MediaLibrary {
     for (const k of [...this.loading]) if (k.startsWith(`${id}:`)) this.loading.delete(k);
   }
 
-  private request(m: MediaItem, job: 'thumbs' | 'peaks' | 'still'): void {
-    const k = `${m.id}:${job}`;
+  private request(m: MediaItem, job: 'thumbs' | 'peaks' | 'still', stream = 0): void {
+    const k = `${m.id}:${job}${stream ? `:${stream}` : ''}`;
     if (this.loading.has(k) || this.missing.has(m.id) || this.broken.has(m.id)) return;
     if (job === 'thumbs' && m.kind !== 'video') return;
     if (job === 'still' && m.kind !== 'image') return;
     this.loading.add(k);
     // Stills are needed to show the picture, so they go first
-    if (job === 'still') this.queue.unshift({ m, job });
-    else this.queue.push({ m, job });
+    if (job === 'still') this.queue.unshift({ m, job, stream });
+    else this.queue.push({ m, job, stream });
     void this.work();
   }
 
@@ -139,11 +141,11 @@ export class MediaLibrary {
     this.busy = true;
     try {
       while (this.queue.length) {
-        const { m, job } = this.queue.shift()!;
+        const { m, job, stream } = this.queue.shift()!;
         try {
           if (job === 'still') await this.makeStill(m);
           else if (job === 'thumbs') await this.makeThumbs(m);
-          else await this.makePeaks(m);
+          else await this.makePeaks(m, stream);
           this.emit(m.id);
         } catch (err) {
           console.warn(`Couldn't make ${job} for ${m.name}:`, err);
@@ -213,16 +215,17 @@ export class MediaLibrary {
     }
   }
 
-  private async makePeaks(m: MediaItem): Promise<void> {
-    const key = cacheKey('peaks', m);
+  private async makePeaks(m: MediaItem, stream = 0): Promise<void> {
+    const id = stream ? `${m.id}:${stream}` : m.id;
+    const key = cacheKey('peaks', m) + (stream ? `-a${stream}` : '');
     const cached = await platform.cache.get(key);
     if (cached?.length) {
-      this.peaks.set(m.id, { rate: PEAK_RATE, data: cached });
+      this.peaks.set(id, { rate: PEAK_RATE, data: cached });
       return;
     }
     const input = openInput(m.path);
     try {
-      const track = await input.getPrimaryAudioTrack();
+      const track = await soundTrackOf(input, m.streams?.[stream]);
       if (!track) return;
       const slots = Math.max(1, Math.ceil(m.duration * PEAK_RATE));
       const data = new Uint8Array(slots);
@@ -257,11 +260,11 @@ export class MediaLibrary {
         // Show the waveform as it's made, every few seconds of audio
         if (timestamp - shown > 20) {
           shown = timestamp;
-          this.peaks.set(m.id, { rate: PEAK_RATE, data });
+          this.peaks.set(id, { rate: PEAK_RATE, data });
           this.emit(m.id);
         }
       }
-      this.peaks.set(m.id, { rate: PEAK_RATE, data });
+      this.peaks.set(id, { rate: PEAK_RATE, data });
       void platform.cache.put(key, data);
     } finally {
       input.dispose();

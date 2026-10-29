@@ -42,7 +42,7 @@ export async function autoDuck(app: App): Promise<void> {
   for (const v of voices) {
     const m = mediaOf(app.project!, v);
     if (!m?.hasAudio) continue;
-    const peaks = app.library.peaksOf(m);
+    const peaks = app.library.peaksOf(m, v.stream ?? 0);
     if (!peaks) {
       toast(`Still reading the sound of ${v.name}. Try again in a moment.`);
       return;

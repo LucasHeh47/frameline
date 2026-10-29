@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Videos with several sound tracks** (screen recordings with game, microphone and music apart, camera files with two mics): every track is imported and placed on its own audio track (A1, A2, A3…), named after the file's track names and linked to the picture. Each plays, shows its waveform and exports on its own, so you can mix or mute them separately. Files imported earlier get all their tracks the next time they're placed. Remove pauses listens to the microphone track.
 - **Smoother playback.** While playing, Frameline redid a lot of work on every frame: the timeline (waveforms and all) was redrawn just to move the playhead, panels made the page lay itself out again, the play button and every keyframe row were rebuilt, and the Markers list was rebuilt (which also interrupted typing a marker's name). It now does about a third of the work.
 - **Fixed a leak** that added listeners to the duration readout on every frame while playing.
 - Filmstrip thumbnails and the waveforms of long files are worked out faster.

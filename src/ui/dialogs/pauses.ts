@@ -2,7 +2,7 @@
 // taken out (with their picture), and everything after closes up.
 import { silentRanges } from '../../core/audioAnalysis';
 import { removeRanges } from '../../core/edit';
-import { clipEnd, linkedClips, mediaOf, sourceTimeAt, type Clip } from '../../core/project';
+import { clipEnd, clipStream, linkedClips, mediaOf, sourceTimeAt, type Clip } from '../../core/project';
 import { clipGain } from '../../core/timeline';
 import { shortDuration } from '../../core/time';
 import type { App } from '../app';
@@ -31,11 +31,13 @@ export async function removePauses(app: App): Promise<void> {
     if (seen.has(clip.id)) continue;
     const linked = linkedClips(s, clip);
     for (const l of linked) seen.add(l.id);
-    const sound = linked.find((c) => c.kind === 'audio');
+    // With several sound tracks (game, mic…), the voice decides where the pauses are
+    const sounds = linked.filter((c) => c.kind === 'audio');
+    const sound = sounds.find((c) => /mic|voice|vocal|narrat|commentary/i.test(clipStream(mediaOf(app.project!, c), c)?.name ?? '')) ?? sounds[0];
     if (!sound) continue;
     const m = mediaOf(app.project!, sound);
     if (!m?.hasAudio) continue;
-    const peaks = app.library.peaksOf(m);
+    const peaks = app.library.peaksOf(m, sound.stream ?? 0);
     if (!peaks) {
       toast(`Still reading the sound of ${sound.name}. Try again in a moment.`);
       return;
